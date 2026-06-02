@@ -1,0 +1,68 @@
+// Credit-card statement tracker — data model.
+// Cloudflare D1 (SQLite) via the Prisma D1 driver adapter.
+// Money stored as bigint MINOR units (sen), never float.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  // No custom output: OpenNext patches the client at its default location
+  // (node_modules/.prisma/client) for Workers/workerd compatibility at build
+  // time. A custom output dir bypasses that patch and breaks on workerd.
+}
+
+datasource db {
+  provider = "sqlite"
+  // Runtime uses the D1 binding (see src/lib/prisma.ts), not this URL.
+  // DATABASE_URL points at a local SQLite file used only by the Prisma CLI
+  // (`prisma generate`, `prisma migrate diff`).
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+
+  cards Card[]
+}
+
+// A credit card. Doubles as the "account" a statement is paid into.
+model Card {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String // e.g. "Maybank Visa Signature"
+  issuer    String? // bank name
+  last4     String? // optional, display only — never the full PAN
+  color     String   @default("#6366f1") // dashboard accent
+  // Billing schedule, day-of-month (1-31). A statement's actual dates are
+  // computed from these + its cycle month. paymentDay < statementDay means the
+  // payment falls in the following month (e.g. statement 22nd, pay 10th next).
+  statementDay Int
+  paymentDay   Int
+  currency     String   @default("MYR") // ISO-4217; statements inherit it
+  createdAt    DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statements Statement[]
+
+  @@index([userId])
+}
+
+// One monthly statement for a card. Fully manual entry in v1.
+model Statement {
+  id            String    @id @default(cuid())
+  cardId        String
+  statementDate DateTime // computed from card.statementDay + cycle month
+  dueDate       DateTime // computed from card.paymentDay + cycle month
+  amountDue     BigInt // minor units (sen). > 0 enforced at the app boundary.
+  paid          Boolean   @default(false)
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@index([dueDate])
+}

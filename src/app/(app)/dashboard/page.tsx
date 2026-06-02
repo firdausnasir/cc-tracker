@@ -11,7 +11,7 @@ import {
   type DueState,
 } from "@/lib/dates";
 import type { ReactNode } from "react";
-import { PlusIcon, CheckIcon, Undo2Icon, Trash2Icon } from "lucide-react";
+import { PlusIcon, CheckIcon, Undo2Icon, Trash2Icon, ChevronDownIcon } from "lucide-react";
 
 import { AddStatementDialog } from "@/components/add-statement-dialog";
 import { EditStatementDialog } from "@/components/edit-statement-dialog";
@@ -105,8 +105,8 @@ export default async function DashboardPage() {
   // Per-card breakdown across all unpaid statements, most-urgent card first.
   const groups = groupByCard(unpaid);
 
-  // Paid history, grouped by card so each statement's owner is obvious.
-  const paidGroups = groupByCard(paid);
+  // Paid history, grouped by statement cycle (newest first); each row is a card.
+  const paidCycles = groupByCycle(paid);
 
   return (
     <div className="flex flex-col gap-5">
@@ -221,25 +221,14 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      {paidGroups.length > 0 && (
+      {paidCycles.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Paid history
           </h2>
-          {paidGroups.map(({ card, rows }) => {
-            const total = rows.reduce((sum, r) => sum + r.amountDue, 0n);
-
-            return (
-              <Card key={card.id} size="sm" className="gap-0! py-0!">
-                <CardGroupHeader card={card} total={total} mutedTotal />
-                <div className="flex flex-col divide-y divide-border border-t border-border">
-                  {rows.map((s) => (
-                    <StatementRow key={s.id} statement={s} state="paid" muted />
-                  ))}
-                </div>
-              </Card>
-            );
-          })}
+          {paidCycles.map((cycle) => (
+            <PaidCycleGroup key={cycle.monthKey} cycle={cycle} />
+          ))}
         </section>
       )}
     </div>
@@ -413,6 +402,80 @@ function StatementActions({ statement: s }: { statement: Row }) {
   );
 }
 
+// One paid-history cycle: its month, all the cards paid in it, and the totals
+// split per currency (a cycle can hold cards billed in different currencies).
+type CycleGroup = {
+  monthKey: string;
+  label: string;
+  rows: Row[];
+  totals: { currency: string; total: bigint }[];
+};
+
+// A paid cycle rendered as a native <details> accordion, collapsed by default.
+// The summary shows the cycle and its per-currency total(s); expanding reveals
+// one row per card.
+function PaidCycleGroup({ cycle }: { cycle: CycleGroup }) {
+  const count = cycle.rows.length;
+
+  return (
+    <Card size="sm" className="gap-0! py-0!">
+      <details className="group/cycle">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+          <ChevronDownIcon
+            className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open/cycle:rotate-180"
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-medium">{cycle.label}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {count} card{count === 1 ? "" : "s"}
+            </div>
+          </div>
+          <div className="tabular shrink-0 text-right text-sm font-semibold tracking-tight text-muted-foreground">
+            {cycle.totals.map((t) => (
+              <div key={t.currency}>{formatMinor(t.total, t.currency)}</div>
+            ))}
+          </div>
+        </summary>
+        <div className="flex flex-col divide-y divide-border border-t border-border">
+          {cycle.rows.map((s) => (
+            <PaidCardRow key={s.id} statement={s} />
+          ))}
+        </div>
+      </details>
+    </Card>
+  );
+}
+
+// A single paid statement inside a cycle group. Grouping is by cycle now, so the
+// row identifies its card; the currency stays on the figure because a cycle can
+// mix currencies.
+function PaidCardRow({ statement: s }: { statement: Row }) {
+  const meta = [s.card.issuer, s.card.last4 ? `•••• ${s.card.last4}` : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="group/row flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40 sm:py-3">
+      <span
+        className="size-2.5 shrink-0 rounded-full ring-2 ring-foreground/5"
+        style={{ backgroundColor: s.card.color }}
+        aria-hidden
+      />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{s.card.name}</div>
+        {meta && <div className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</div>}
+      </div>
+      <div className="tabular shrink-0 text-sm font-semibold tracking-tight text-muted-foreground">
+        {formatMinor(s.amountDue, s.currency)}
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <StatementActions statement={s} />
+      </div>
+    </div>
+  );
+}
+
 type MonthTotal = {
   currency: string;
   total: bigint;
@@ -461,4 +524,43 @@ function groupByCard(rows: Row[]): { card: Row["card"]; rows: Row[] }[] {
     Math.min(...rows.map((r) => r.dueDate.getTime()));
 
   return [...map.values()].sort((a, b) => minDue(a.rows) - minDue(b.rows));
+}
+
+// Group statements by statement cycle (yyyy-MM), newest cycle first. Within a
+// cycle rows are ordered by card name, and totals are split per currency —
+// summing across currencies is financially meaningless. The yyyy-MM key sorts
+// chronologically as a plain string, so no date math is needed for ordering.
+function groupByCycle(rows: Row[]): CycleGroup[] {
+  const map = new Map<string, { monthKey: string; label: string; rows: Row[] }>();
+
+  for (const s of rows) {
+    const monthKey = monthKeyOf(s.statementDate);
+    const group =
+      map.get(monthKey) ??
+      { monthKey, label: formatCycleMonth(s.statementDate), rows: [] };
+    group.rows.push(s);
+    map.set(monthKey, group);
+  }
+
+  return [...map.values()]
+    .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
+    .map((c) => ({
+      monthKey: c.monthKey,
+      label: c.label,
+      rows: [...c.rows].sort((a, b) => a.card.name.localeCompare(b.card.name)),
+      totals: sumByCurrency(c.rows),
+    }));
+}
+
+// Per-currency totals for a set of statements, currency-sorted for stable order.
+function sumByCurrency(rows: Row[]): { currency: string; total: bigint }[] {
+  const map = new Map<string, bigint>();
+
+  for (const s of rows) {
+    map.set(s.currency, (map.get(s.currency) ?? 0n) + s.amountDue);
+  }
+
+  return [...map.entries()]
+    .map(([currency, total]) => ({ currency, total }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
 }
