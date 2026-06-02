@@ -48,9 +48,14 @@ function Button({
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
-      data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
+      // Pinned after the spread so a slot-stamping primitive (Dialog.Trigger /
+      // Dialog.Close via `render={<Button>}`) can't override it. base-ui clones
+      // the trigger's `data-slot="dialog-trigger"` onto this element, and which
+      // value won resolved differently SSR vs client → hydration mismatch.
+      // Pinning last makes the host `data-slot` deterministic. Nothing styles on it.
+      data-slot="button"
     />
   )
 }

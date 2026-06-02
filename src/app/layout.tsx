@@ -44,7 +44,9 @@ export const viewport: Viewport = {
 // manually rendering <head>, which clashes with Next's head management and
 // caused a hydration mismatch). The <html> class it mutates is marked
 // suppressHydrationWarning so React doesn't flag the server/client difference.
-const noFlashTheme = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
+// "device" (the default) and any absent/unknown value follow the OS preference;
+// only an explicit "light"/"dark" choice overrides it.
+const noFlashTheme = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
 
 export default function RootLayout({
   children,

@@ -42,6 +42,9 @@ model Card {
   statementDay Int
   paymentDay   Int
   currency     String   @default("MYR") // ISO-4217; statements inherit it
+  // Manual sort order within a user's card list (drag-drop). Lower = first;
+  // ties break on createdAt. New cards append at max(position)+1.
+  position     Int      @default(0)
   createdAt    DateTime @default(now())
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)

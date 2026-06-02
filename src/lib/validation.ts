@@ -49,6 +49,13 @@ export const cardUpdateSchema = cardSchema.extend({
   id: z.string().min(1),
 });
 
+// Drag-drop reorder payload: the user's card ids in their new order. Ownership
+// (this set === the user's owned set) is enforced in the action, not here — the
+// schema only guarantees the shape.
+export const cardReorderSchema = z
+  .array(z.string().min(1))
+  .min(1, "No cards to reorder");
+
 // yyyy-MM cycle key from the month picker.
 const monthKey = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Pick a month");
 

@@ -56,7 +56,7 @@ export default async function DashboardPage() {
   const [cards, statements] = await Promise.all([
     prisma.card.findMany({
       where: { userId },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       select: { id: true, name: true, issuer: true },
     }),
     prisma.statement.findMany({
