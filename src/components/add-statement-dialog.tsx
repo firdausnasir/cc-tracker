@@ -15,7 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type CardOption = { id: string; name: string };
+type CardOption = { id: string; name: string; issuer: string | null };
 
 export function AddStatementDialog({
   cards,

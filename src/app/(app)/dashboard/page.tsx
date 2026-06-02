@@ -57,7 +57,7 @@ export default async function DashboardPage() {
     prisma.card.findMany({
       where: { userId },
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, issuer: true },
     }),
     prisma.statement.findMany({
       where: { card: { userId } },

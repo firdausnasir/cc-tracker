@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from "@/components/ui/combobox";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -15,7 +25,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type CardOption = { id: string; name: string };
+type CardOption = { id: string; name: string; issuer: string | null };
+
+// Display a card as "Bank Cardname" (e.g. "UOB Preferred") when the issuer is
+// set; fall back to the bare name otherwise.
+function cardLabel(card: { name: string; issuer: string | null }): string {
+  return card.issuer ? `${card.issuer} ${card.name}` : card.name;
+}
 
 type MonthOption = { value: string; label: string };
 
@@ -74,9 +90,14 @@ function StatementFormInner({
   // Base UI resolves the trigger label from this map, so the closed trigger
   // shows "May 2026" instead of the raw "2026-05" value before the popup mounts.
   const cardItems = React.useMemo(
-    () => cards?.map((c) => ({ value: c.id, label: c.name })) ?? [],
+    () => cards?.map((c) => ({ value: c.id, label: cardLabel(c) })) ?? [],
     [cards],
   );
+
+  // The Combobox is controlled by the selected item object, but the form needs
+  // the id — keep the two in sync through this one source array so equality
+  // stays referential.
+  const selectedCard = cardItems.find((c) => c.value === cardId) ?? null;
 
   // The action returns `null` on success and `{error}` on failure, so success
   // is only the pending true->false edge with no error. Watch that edge.
@@ -98,22 +119,26 @@ function StatementFormInner({
         <div className="col-span-2 flex flex-col gap-1.5">
           <Label htmlFor="cardId">Card</Label>
           <input type="hidden" name="cardId" value={cardId} required />
-          <Select
+          <Combobox
             items={cardItems}
-            value={cardId}
-            onValueChange={(value) => setCardId(value as string)}
+            value={selectedCard}
+            onValueChange={(item) => setCardId(item?.value ?? "")}
           >
-            <SelectTrigger id="cardId" size="default" className="h-9 w-full">
-              <SelectValue placeholder="Choose a card…" />
-            </SelectTrigger>
-            <SelectContent>
-              {cards?.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <ComboboxTrigger id="cardId" size="default" className="h-9 w-full">
+              <ComboboxValue placeholder="Choose a card…" />
+            </ComboboxTrigger>
+            <ComboboxContent>
+              <ComboboxInput placeholder="Search cards…" />
+              <ComboboxEmpty>No cards found.</ComboboxEmpty>
+              <ComboboxList>
+                {(item: { value: string; label: string }) => (
+                  <ComboboxItem key={item.value} value={item}>
+                    {item.label}
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
         </div>
       )}
 
