@@ -1,10 +1,12 @@
 # Statement Tracker
 
-A small, personal credit-card statement tracker. Log each card's monthly
+A personal credit-card statement tracker. Add your cards, log each monthly
 statement — how much is due and by when — and see what you still owe this cycle.
+v1 is fully manual entry.
 
-Built for **one user, deployed to Cloudflare Workers** with a **Cloudflare D1**
-(SQLite) database. v1 is fully manual entry.
+Multi-user: anyone can sign up, and every account is isolated by `userId` at
+every query. Deployed to Cloudflare Workers with a Cloudflare D1 (SQLite)
+database.
 
 ## Stack
 
@@ -12,15 +14,30 @@ Built for **one user, deployed to Cloudflare Workers** with a **Cloudflare D1**
 - **Cloudflare Workers** via the **OpenNext** adapter (`@opennextjs/cloudflare`)
 - **Auth.js v5** (NextAuth) — email/password (Credentials), JWT sessions
 - **Prisma 6** → **Cloudflare D1** via the `@prisma/adapter-d1` driver adapter
-- **Tailwind CSS v4**
+- **Tailwind CSS v4** + shadcn (`base-nova`, base-ui primitives)
 - Money stored as **bigint minor units** (sen) + ISO-4217 currency — never float.
 
 ## Data model
 
-- `User` — the single account (registration locks after the first signup).
-- `Card` — a credit card; doubles as the "account" you pay into.
-- `Statement` — one monthly statement: amount due, statement date, due date,
-  currency, paid/unpaid.
+- `User` — an account (email + bcrypt password hash). Registration is open;
+  accounts are isolated by `userId`.
+- `Card` — a credit card: name, optional issuer/last4, accent color, currency,
+  and a billing schedule (`statementDay`/`paymentDay`, day-of-month 1–31).
+- `Statement` — one monthly statement: amount due (bigint sen), paid/unpaid,
+  and a `statementDate`/`dueDate` **computed** from the card's schedule and the
+  cycle month at write time.
+
+## Features
+
+- Per-card billing schedule; concrete statement and due dates are derived from
+  it per cycle (`paymentDay < statementDay` rolls the due date into the next
+  month; a 31st-of-month card is clamped to a valid day in short months).
+- Dashboard view of what's outstanding, with paid/overdue/soon/upcoming state.
+- Searchable, bank-prefixed card select when adding statements.
+- Light/dark theme.
+- Installable as a PWA (home-screen / desktop install prompt).
+
+Presentation timezone is MYT (`Asia/Kuala_Lumpur`); the worker clock is UTC.
 
 ## Local setup
 
@@ -46,13 +63,17 @@ Built for **one user, deployed to Cloudflare Workers** with a **Cloudflare D1**
    # or, against the real Workers runtime:
    npm run preview            # opennextjs-cloudflare build && preview
    ```
-   Open the served URL → you'll be sent to `/signup`. The first account you
-   create becomes the owner; signup then closes.
+   Open the served URL → you'll be sent to `/signup`. Create an account and
+   you're in.
 
 ## Database & migrations (Cloudflare D1)
 
 D1 has its own migration system (`wrangler d1 migrations`); Prisma generates the
-SQL via `prisma migrate diff`. Migrations live in `migrations/`.
+SQL via `prisma migrate diff`. `prisma/schema.prisma` is the source of truth for
+the data model; migrations live in `migrations/`.
+
+> **No transactions:** D1 does not support transactions, so Prisma `$transaction`
+> is unavailable. This app does not use it.
 
 ```bash
 # 1. scaffold an empty migration file
@@ -64,35 +85,7 @@ npx prisma migrate diff --from-local-d1 \
   --output migrations/<NNNN>_<name>.sql
 # 3. apply
 npm run db:migrate:local      # local SQLite (.wrangler/state)
-npm run db:migrate:remote     # remote D1
 ```
-
-> **No transactions:** D1 does not support transactions, so Prisma `$transaction`
-> is unavailable. This app does not use it.
-
-## Deploy to Cloudflare Workers
-
-1. **Authenticate** (interactive):
-   ```bash
-   npx wrangler login
-   ```
-2. **Create the D1 database** and paste its `database_id` into `wrangler.jsonc`:
-   ```bash
-   npx wrangler d1 create cc-tracker
-   ```
-3. **Apply migrations to remote D1:**
-   ```bash
-   npm run db:migrate:remote
-   ```
-4. **Set the production auth secret** (Worker secret, not committed):
-   ```bash
-   npx wrangler secret put AUTH_SECRET
-   ```
-5. **Deploy:**
-   ```bash
-   npm run deploy
-   ```
-6. Open the `*.workers.dev` URL → `/signup` to create the single account.
 
 ## Verify
 
@@ -106,7 +99,6 @@ npm run preview     # opennextjs-cloudflare build && preview (Workers runtime)
 
 - Partial payments + remaining-balance tracking
 - Minimum-due vs full-statement-balance
-- Auto-generate cycles from each card's statement day
+- Auto-generate upcoming cycles from each card's schedule
 - Email / push due-date reminders
 - CSV / statement import
-- Multi-user support
