@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { PlusIcon, CheckIcon, Undo2Icon, Trash2Icon, ChevronDownIcon } from "lucide-react";
 
 import { AddStatementDialog } from "@/components/add-statement-dialog";
+import { ImportStatementDialog } from "@/components/import-statement-dialog";
 import { EditStatementDialog } from "@/components/edit-statement-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { togglePaidAction, deleteStatementAction } from "@/app/actions/statements";
@@ -117,7 +118,10 @@ export default async function DashboardPage() {
             {formatMonthYear(now)}
           </h1>
         </div>
-        <AddStatementDialog cards={cards} />
+        <div className="flex items-center gap-2">
+          <ImportStatementDialog cards={cards} />
+          <AddStatementDialog cards={cards} />
+        </div>
       </header>
 
       {/* Hero — one figure per currency, never summed across currencies. */}

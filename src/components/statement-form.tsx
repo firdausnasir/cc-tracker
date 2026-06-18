@@ -57,6 +57,10 @@ type StatementFormProps = {
   cards?: CardOption[];
   /** Preselect a card in create mode (e.g. quick-add from a card row). */
   defaultCardId?: string;
+  /** Prefill the cycle month in create mode (e.g. an AI-extracted draft). */
+  defaultMonth?: string;
+  /** Prefill the amount in create mode (e.g. an AI-extracted draft). */
+  defaultAmount?: string;
   /** Present in edit mode: prefills the cycle month + amount, carries the id. */
   defaults?: { id: string; month: string; amount: string; cardName: string };
   /** Current month key (yyyy-MM) and the option list, resolved by the caller. */
@@ -71,6 +75,8 @@ function StatementFormInner({
   action,
   cards,
   defaultCardId,
+  defaultMonth,
+  defaultAmount,
   defaults,
   currentMonth,
   monthOptions,
@@ -85,7 +91,9 @@ function StatementFormInner({
   const [cardId, setCardId] = React.useState(
     defaultCardId ?? (cards?.length === 1 ? cards[0].id : ""),
   );
-  const [month, setMonth] = React.useState(defaults?.month ?? currentMonth);
+  const [month, setMonth] = React.useState(
+    defaults?.month ?? defaultMonth ?? currentMonth,
+  );
 
   // Base UI resolves the trigger label from this map, so the closed trigger
   // shows "May 2026" instead of the raw "2026-05" value before the popup mounts.
@@ -178,7 +186,7 @@ function StatementFormInner({
           inputMode="decimal"
           placeholder="0.00"
           required
-          defaultValue={defaults?.amount}
+          defaultValue={defaults?.amount ?? defaultAmount}
           className="tabular h-9"
         />
       </div>
@@ -205,6 +213,8 @@ export function StatementForm({
   action,
   cards,
   defaultCardId,
+  defaultMonth,
+  defaultAmount,
   submitLabel,
   pendingLabel,
   onSuccess,
@@ -212,6 +222,8 @@ export function StatementForm({
   action: StatementFormProps["action"];
   cards: CardOption[];
   defaultCardId?: string;
+  defaultMonth?: string;
+  defaultAmount?: string;
   submitLabel: string;
   pendingLabel: string;
   onSuccess?: () => void;
@@ -219,8 +231,19 @@ export function StatementForm({
   const { currentMonth, monthOptions } = React.useMemo(() => {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    return { currentMonth, monthOptions: buildMonthOptions(now) };
-  }, []);
+    const options = buildMonthOptions(now);
+    // An AI-extracted month may fall outside the default window — keep it
+    // selectable so the prefill survives.
+    if (defaultMonth && !options.some((o) => o.value === defaultMonth)) {
+      const [y, m] = defaultMonth.split("-").map(Number);
+      const d = new Date(y, m - 1, 1);
+      options.push({
+        value: defaultMonth,
+        label: d.toLocaleDateString("en-MY", { month: "long", year: "numeric" }),
+      });
+    }
+    return { currentMonth, monthOptions: options };
+  }, [defaultMonth]);
 
   if (cards.length === 0) {
     return (
@@ -235,6 +258,8 @@ export function StatementForm({
       action={action}
       cards={cards}
       defaultCardId={defaultCardId}
+      defaultMonth={defaultMonth}
+      defaultAmount={defaultAmount}
       currentMonth={currentMonth}
       monthOptions={monthOptions}
       submitLabel={submitLabel}

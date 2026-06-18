@@ -34,6 +34,10 @@ database.
   month; a 31st-of-month card is clamped to a valid day in short months).
 - Dashboard view of what's outstanding, with paid/overdue/soon/upcoming state.
 - Searchable, bank-prefixed card select when adding statements.
+- **Import a statement from a PDF** — upload a statement and an
+  OpenAI-compatible model reads the balance, cycle month, currency and best-match
+  card into a prefilled form you review before saving. Requires
+  `OPENAI_*` env (see setup); the chosen model must accept PDF input.
 - Light/dark theme.
 - Installable as a PWA (home-screen / desktop install prompt).
 
@@ -51,6 +55,9 @@ Presentation timezone is MYT (`Asia/Kuala_Lumpur`); the worker clock is UTC.
      CLI for `generate` / `migrate diff`; the running app uses the D1 binding).
    - `.dev.vars` — `NEXTJS_ENV=development` and `AUTH_SECRET=<random>`
      (generate with `openssl rand -base64 32`). This file is gitignored.
+     For PDF import, also set `OPENAI_BASE_URL`, `OPENAI_API_KEY` and
+     `OPENAI_MODEL` (see `.dev.vars.example`). In production set these via
+     `wrangler secret put <NAME>`.
 
 3. **Create the local D1 database and apply migrations**
    ```bash

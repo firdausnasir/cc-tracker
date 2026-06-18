@@ -1,0 +1,13 @@
+# Local secrets for `wrangler dev` / `npm run dev`. Copy to `.dev.vars` and fill.
+# In production set these with `wrangler secret put <NAME>`.
+
+# Auth.js session secret (any high-entropy string).
+AUTH_SECRET=
+
+# OpenAI-compatible provider for AI PDF statement import.
+# The PDF text is extracted locally and sent as plain text, so any chat model
+# works — no document/vision support required. Point OPENAI_BASE_URL at any
+# compatible gateway.
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini

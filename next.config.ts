@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
   // the Workers (workerd) runtime. Required for @prisma/adapter-d1.
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
 
+  // Statement-PDF import rides in a Server Action body; the default 1 MB cap
+  // rejects real statements before the action's own 8 MB check runs. Lift to
+  // 10 MB — headroom over the 8 MB file cap for multipart encoding overhead.
+  experimental: {
+    serverActions: { bodySizeLimit: "10mb" },
+  },
+
   // Baseline security headers (PWA hardening). No service-worker route here —
   // this build is install-only, with no sw.js to special-case.
   async headers() {

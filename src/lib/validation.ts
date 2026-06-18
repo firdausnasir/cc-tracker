@@ -83,6 +83,31 @@ export const statementUpdateSchema = z.object({
     .refine((v) => Number(v) > 0, "Amount must be greater than zero"),
 });
 
+// The model's PDF-extraction output. Kept loose by design: a statement PDF may
+// omit fields, so currency/cardId/month/amount are each nullable. The amount,
+// when present, is the same decimal-string shape the statement validator
+// accepts, so it round-trips through parseAmountToMinor unchanged. Ownership of
+// any returned cardId is re-checked server-side — this schema only guards shape.
+export const aiStatementDraftSchema = z.object({
+  amount: z
+    .string()
+    .trim()
+    .regex(/^\d{1,15}(\.\d{1,2})?$/)
+    .nullish(),
+  month: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .nullish(),
+  currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(ISO_4217)
+    .nullish(),
+  cardId: z.string().min(1).nullish(),
+});
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type CardInput = z.infer<typeof cardSchema>;
 export type StatementInput = z.infer<typeof statementSchema>;
+export type AiStatementDraft = z.infer<typeof aiStatementDraftSchema>;
