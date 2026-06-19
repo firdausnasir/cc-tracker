@@ -107,7 +107,16 @@ export const aiStatementDraftSchema = z.object({
   cardId: z.string().min(1).nullish(),
 });
 
+// A single PDF may consolidate more than one card, so extraction returns a list.
+// Wrapped in an object (not a bare array) to stay valid under the provider's
+// `response_format: json_object`, which requires a top-level object. Capped to
+// bound a pathological response.
+export const aiStatementDraftsSchema = z.object({
+  statements: z.array(aiStatementDraftSchema).max(10),
+});
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type CardInput = z.infer<typeof cardSchema>;
 export type StatementInput = z.infer<typeof statementSchema>;
 export type AiStatementDraft = z.infer<typeof aiStatementDraftSchema>;
+export type AiStatementDrafts = z.infer<typeof aiStatementDraftsSchema>;

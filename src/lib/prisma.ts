@@ -1,13 +1,19 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaD1 } from "@prisma/adapter-d1";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-// The D1 binding is request-scoped on Workers, so we can't hold a single global
-// client like we did with Postgres. Build one per request from the binding
-// resolved out of the Cloudflare context.
+// Standard Node Prisma client over SQLite (DATABASE_URL=file:...). Reused across
+// requests; cached on globalThis in dev so Next's hot-reload doesn't leak a new
+// connection per reload.
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+
+// Kept async so existing `await getPrisma()` call sites stay unchanged. There is
+// no per-request binding anymore (that was the Cloudflare D1 model) — this just
+// returns the shared singleton.
 export async function getPrisma(): Promise<PrismaClient> {
-  const { env } = await getCloudflareContext({ async: true });
-  const adapter = new PrismaD1(env.DB);
-
-  return new PrismaClient({ adapter });
+  return prisma;
 }

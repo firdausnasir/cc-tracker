@@ -1,0 +1,29 @@
+# cc-tracker — single-service deployment. `docker compose up -d` builds the
+# image, runs Prisma migrations, and serves on :3000.
+#
+# SQLite persists via a HOST BIND MOUNT: the DB file lives at ./data/cc.db on
+# this machine, not inside the container. `docker compose down` (even with the
+# image removed) leaves ./data untouched — your data stays put. Back it up by
+# copying ./data; reset by deleting ./data/cc.db.
+
+services:
+  app:
+    build: .
+    image: cc-tracker:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Pin the DB to the mounted path regardless of what .env carries.
+      DATABASE_URL: "file:/data/cc.db"
+      NODE_ENV: production
+    volumes:
+      - ./data:/data
+    networks:
+      - cc-tracker
+
+networks:
+  cc-tracker:
+    driver: bridge

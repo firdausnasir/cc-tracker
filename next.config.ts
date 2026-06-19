@@ -1,8 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Keep Prisma out of the Next bundle so OpenNext can patch the client for
-  // the Workers (workerd) runtime. Required for @prisma/adapter-d1.
+  // Self-contained server output (`.next/standalone`): node-file-trace copies
+  // only the node_modules the server actually needs, keeping the Docker image
+  // small (drops next/swc, icon/date libs, and other build-only deps).
+  output: "standalone",
+
+  // Keep Prisma out of the Next bundle; the client + its query engine are loaded
+  // from node_modules at runtime (traced into standalone), not webpacked.
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
 
   // Statement-PDF import rides in a Server Action body; the default 1 MB cap
@@ -29,9 +34,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-// Makes the Cloudflare bindings (D1, etc.) available via getCloudflareContext()
-// during `next dev`. No-op in the production Workers build.
-import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-
-initOpenNextCloudflareForDev();

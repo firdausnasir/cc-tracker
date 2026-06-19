@@ -1,7 +1,7 @@
 // AI-assisted statement extraction from a PDF.
 //
-// Extracts the PDF's text layer locally (unpdf, a serverless pdf.js build that
-// runs on workerd) and sends that TEXT to an OpenAI-compatible chat-completions
+// Extracts the PDF's text layer locally (unpdf, a serverless pdf.js build) and
+// sends that TEXT to an OpenAI-compatible chat-completions
 // endpoint, asking the model to return a small JSON draft (amount, cycle month,
 // currency, best-match card). Text-first rather than a multimodal `file` block:
 // most OpenAI-compatible endpoints silently drop file blocks or run
@@ -15,19 +15,9 @@
 // provider — that is inherent to this feature and scoped to a single
 // self-hosted user.
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { extractText, getDocumentProxy } from "unpdf";
 
-import { aiStatementDraftSchema, type AiStatementDraft } from "@/lib/validation";
-
-// Secrets/vars are not part of the wrangler-generated CloudflareEnv interface
-// (they live in .dev.vars / `wrangler secret put`), so read them through a
-// narrow local shape rather than editing the generated types.
-type AiEnv = {
-  OPENAI_BASE_URL?: string;
-  OPENAI_API_KEY?: string;
-  OPENAI_MODEL?: string;
-};
+import { aiStatementDraftsSchema, type AiStatementDraft } from "@/lib/validation";
 
 type AiConfig = {
   baseUrl: string;
@@ -50,13 +40,10 @@ export class AiExtractError extends Error {}
 
 // Resolve and validate provider config. Throws loudly if any var is unset so a
 // misconfigured instance fails fast at the boundary instead of mid-request.
-async function getAiConfig(): Promise<AiConfig> {
-  const { env } = await getCloudflareContext({ async: true });
-  const aiEnv = env as unknown as AiEnv;
-
-  const baseUrl = aiEnv.OPENAI_BASE_URL?.trim().replace(/\/+$/, "");
-  const apiKey = aiEnv.OPENAI_API_KEY?.trim();
-  const model = aiEnv.OPENAI_MODEL?.trim();
+function getAiConfig(): AiConfig {
+  const baseUrl = process.env.OPENAI_BASE_URL?.trim().replace(/\/+$/, "");
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const model = process.env.OPENAI_MODEL?.trim();
 
   if (!baseUrl || !apiKey || !model) {
     throw new AiExtractError(
@@ -80,8 +67,11 @@ function buildPrompt(cards: CardForMatch[], statementText: string): string {
     .join("\n");
 
   return [
-    "You extract one credit-card statement's key fields from the statement text below.",
-    "Return ONLY a JSON object (no prose, no markdown fences) with these keys:",
+    "You extract credit-card statement key fields from the statement text below.",
+    "A single PDF may consolidate more than one card — return one entry per",
+    "distinct card statement found in the document.",
+    'Return ONLY a JSON object (no prose, no markdown fences): { "statements": [ ... ] },',
+    "where each array entry has these keys:",
     '- "amount": the statement balance / total amount due, as a plain decimal string (e.g. "1234.50"). No currency symbol, no thousands separators.',
     '- "month": the statement cycle as "YYYY-MM", derived from the statement date printed on the document.',
     '- "currency": the ISO-4217 code (e.g. "MYR", "USD"). Use null if you cannot tell.',
@@ -90,7 +80,8 @@ function buildPrompt(cards: CardForMatch[], statementText: string): string {
     "Candidate cards:",
     cardLines || "(none)",
     "",
-    "If a value is not present on the statement, use null. Do not guess the amount.",
+    "If a value is not present on a statement, use null. Do not guess the amount.",
+    "If no statement is readable, return an empty array.",
     "",
     "Statement text:",
     '"""',
@@ -104,7 +95,7 @@ function buildPrompt(cards: CardForMatch[], statementText: string): string {
 const MAX_TEXT_CHARS = 24_000;
 
 // Extract the PDF's text layer on-device. unpdf bundles a serverless pdf.js
-// build that runs on the workerd runtime (no Node fs). Returns trimmed text.
+// build (no native deps). Returns trimmed text.
 async function pdfToText(bytes: Uint8Array): Promise<string> {
   let text: string;
   try {
@@ -143,13 +134,14 @@ function extractJsonObject(raw: string): string | null {
   return withoutThink.slice(start, end + 1);
 }
 
-// Extract the PDF text locally, send it to the provider, and return a validated
-// draft. `bytes` is the raw PDF file content.
+// Extract the PDF text locally, send it to the provider, and return validated
+// drafts — one per card statement found (a PDF may consolidate several).
+// `bytes` is the raw PDF file content.
 export async function extractStatementFromPdf(
   bytes: Uint8Array,
   cards: CardForMatch[],
-): Promise<AiStatementDraft> {
-  const { baseUrl, apiKey, model } = await getAiConfig();
+): Promise<AiStatementDraft[]> {
+  const { baseUrl, apiKey, model } = getAiConfig();
 
   const statementText = await pdfToText(bytes);
 
@@ -207,11 +199,17 @@ export async function extractStatementFromPdf(
     throw new AiExtractError("Could not read the statement from this PDF.");
   }
 
-  const result = aiStatementDraftSchema.safeParse(parsed);
+  const result = aiStatementDraftsSchema.safeParse(parsed);
 
   if (!result.success) {
     throw new AiExtractError("Could not read the statement from this PDF.");
   }
 
-  return result.data;
+  // No readable statement is the same surfaced failure as a malformed response —
+  // never hand the caller an empty list to render.
+  if (result.data.statements.length === 0) {
+    throw new AiExtractError("Could not read the statement from this PDF.");
+  }
+
+  return result.data.statements;
 }

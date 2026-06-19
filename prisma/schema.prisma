@@ -1,20 +1,15 @@
 // Credit-card statement tracker — data model.
-// Cloudflare D1 (SQLite) via the Prisma D1 driver adapter.
+// SQLite file (DATABASE_URL=file:...), via the standard Prisma client.
 // Money stored as bigint MINOR units (sen), never float.
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
-  // No custom output: OpenNext patches the client at its default location
-  // (node_modules/.prisma/client) for Workers/workerd compatibility at build
-  // time. A custom output dir bypasses that patch and breaks on workerd.
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
-  // Runtime uses the D1 binding (see src/lib/prisma.ts), not this URL.
-  // DATABASE_URL points at a local SQLite file used only by the Prisma CLI
-  // (`prisma generate`, `prisma migrate diff`).
+  // SQLite file. In Docker this points at the mounted volume
+  // (file:/data/cc.db); the Prisma CLI reads it for `generate`/`migrate`.
   url      = env("DATABASE_URL")
 }
 

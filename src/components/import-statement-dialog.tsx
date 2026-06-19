@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useActionState } from "react";
 import {
+  CheckCircle2Icon,
   FileTextIcon,
   Loader2Icon,
   SparklesIcon,
@@ -13,7 +14,11 @@ import {
 
 import { StatementForm } from "@/components/statement-form";
 import { createStatementAction } from "@/app/actions/statements";
-import { extractStatementAction, type ImportState } from "@/app/actions/import";
+import {
+  extractStatementAction,
+  type ImportState,
+  type StatementDraft,
+} from "@/app/actions/import";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -66,43 +71,11 @@ function ImportFlow({
     null,
   );
 
-  const draft = state && "draft" in state ? state.draft : null;
+  const drafts = state && "drafts" in state ? state.drafts : null;
   const error = state && "error" in state ? state.error : null;
 
-  if (draft) {
-    return (
-      <>
-        <DialogHeader>
-          <DialogTitle>Review extracted statement</DialogTitle>
-          <DialogDescription>
-            Check the figures below before saving — the AI can misread. Dates come
-            from the card&apos;s schedule.
-          </DialogDescription>
-        </DialogHeader>
-
-        {!draft.amount && (
-          <Notice>The amount couldn&apos;t be read — enter it manually.</Notice>
-        )}
-        {draft.currency && (
-          <p className="text-xs text-muted-foreground">
-            Detected currency{" "}
-            <span className="font-medium text-foreground">{draft.currency}</span>.
-            The statement uses its card&apos;s currency — pick a matching card.
-          </p>
-        )}
-
-        <StatementForm
-          action={createStatementAction}
-          cards={cards}
-          defaultCardId={draft.cardId ?? undefined}
-          defaultMonth={draft.month ?? undefined}
-          defaultAmount={draft.amount ?? undefined}
-          submitLabel="Save statement"
-          pendingLabel="Saving…"
-          onSuccess={onDone}
-        />
-      </>
-    );
+  if (drafts) {
+    return <DraftReview drafts={drafts} cards={cards} onDone={onDone} />;
   }
 
   return (
@@ -148,6 +121,128 @@ function ImportFlow({
         </Button>
       </form>
     </>
+  );
+}
+
+// Display a card as "Issuer Name" when the issuer is set; bare name otherwise.
+function cardLabel(card: CardOption): string {
+  return card.issuer ? `${card.issuer} ${card.name}` : card.name;
+}
+
+// A consolidated PDF can yield several drafts. Each is reviewed and saved in its
+// own form; a saved row collapses so it can't be re-submitted, and the dialog
+// closes once every row is saved.
+function DraftReview({
+  drafts,
+  cards,
+  onDone,
+}: {
+  drafts: StatementDraft[];
+  cards: CardOption[];
+  onDone: () => void;
+}) {
+  const [saved, setSaved] = React.useState<ReadonlySet<number>>(new Set());
+  const multiple = drafts.length > 1;
+
+  // Close only after the user has saved every extracted statement.
+  React.useEffect(() => {
+    if (drafts.length > 0 && saved.size === drafts.length) {
+      onDone();
+    }
+  }, [saved, drafts.length, onDone]);
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>
+          {multiple
+            ? `Review ${drafts.length} extracted statements`
+            : "Review extracted statement"}
+        </DialogTitle>
+        <DialogDescription>
+          {multiple
+            ? "This PDF covers more than one card. Check each before saving — the AI can misread. Dates come from the card's schedule."
+            : "Check the figures below before saving — the AI can misread. Dates come from the card's schedule."}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="flex flex-col gap-4">
+        {drafts.map((draft, i) => (
+          <DraftRow
+            key={i}
+            draft={draft}
+            cards={cards}
+            index={i}
+            framed={multiple}
+            saved={saved.has(i)}
+            onSaved={() =>
+              setSaved((prev) => new Set(prev).add(i))
+            }
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function DraftRow({
+  draft,
+  cards,
+  index,
+  framed,
+  saved,
+  onSaved,
+}: {
+  draft: StatementDraft;
+  cards: CardOption[];
+  index: number;
+  framed: boolean;
+  saved: boolean;
+  onSaved: () => void;
+}) {
+  const matchedCard = cards.find((c) => c.id === draft.cardId) ?? null;
+
+  if (saved) {
+    return (
+      <p className="flex items-center gap-2 rounded-lg bg-ok/15 px-3 py-2 text-sm text-ok">
+        <CheckCircle2Icon className="size-4 shrink-0" />
+        <span>
+          Saved{matchedCard ? ` — ${cardLabel(matchedCard)}` : ""}.
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <div className={cn("flex flex-col gap-3", framed && "rounded-xl border border-border p-4")}>
+      {framed && (
+        <p className="text-xs font-medium text-muted-foreground">
+          Statement {index + 1}
+        </p>
+      )}
+
+      {!draft.amount && (
+        <Notice>The amount couldn&apos;t be read — enter it manually.</Notice>
+      )}
+      {draft.currency && (
+        <p className="text-xs text-muted-foreground">
+          Detected currency{" "}
+          <span className="font-medium text-foreground">{draft.currency}</span>.
+          The statement uses its card&apos;s currency — pick a matching card.
+        </p>
+      )}
+
+      <StatementForm
+        action={createStatementAction}
+        cards={cards}
+        defaultCardId={draft.cardId ?? undefined}
+        defaultMonth={draft.month ?? undefined}
+        defaultAmount={draft.amount ?? undefined}
+        submitLabel="Save statement"
+        pendingLabel="Saving…"
+        onSuccess={onSaved}
+      />
+    </div>
   );
 }
 
