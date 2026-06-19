@@ -76,9 +76,9 @@ deleting `./data/cc.db`. Migrations run automatically on every container start
    npm install
    ```
 
-2. **Configure env** — copy `.env.example` to `.env`; for local dev point
-   `DATABASE_URL` at a file under `prisma/` (e.g. `file:./prisma/dev.db`) and set
-   `AUTH_SECRET`.
+2. **Configure env** — copy `.env.example` to `.env`; the default
+   `DATABASE_URL` (`file:./data/cc.db`) matches the path docker bind-mounts,
+   so local dev and container share the same file. Also set `AUTH_SECRET`.
 
 3. **Apply migrations and run**
    ```bash
