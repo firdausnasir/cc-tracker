@@ -67,9 +67,9 @@ function buildPrompt(cards: CardForMatch[], statementText: string): string {
     .join("\n");
 
   return [
-    "You extract credit-card statement key fields from the statement text below.",
-    "A single PDF may consolidate more than one card — return one entry per",
-    "distinct card statement found in the document.",
+    "You extract credit-card statement key fields",
+    "from the statement text below. A single PDF may consolidate more than one",
+    "card — return one entry per distinct card statement found in the document.",
     'Return ONLY a JSON object (no prose, no markdown fences): { "statements": [ ... ] },',
     "where each array entry has these keys:",
     '- "amount": the statement balance / total amount due, as a plain decimal string (e.g. "1234.50"). No currency symbol, no thousands separators.',
