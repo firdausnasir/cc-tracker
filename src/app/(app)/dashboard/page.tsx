@@ -10,17 +10,17 @@ import {
   ordinalDay,
   type DueState,
 } from "@/lib/dates";
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 import { PlusIcon, CheckIcon, Undo2Icon, Trash2Icon, ChevronDownIcon } from "lucide-react";
 
 import { AddStatementDialog } from "@/components/add-statement-dialog";
 import { ImportStatementDialog } from "@/components/import-statement-dialog";
 import { EditStatementDialog } from "@/components/edit-statement-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { CardFace } from "@/components/card-face";
 import { togglePaidAction, deleteStatementAction } from "@/app/actions/statements";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 
 const STATE_BADGE: Record<DueState, { label: string; cls: string }> = {
   overdue: { label: "Overdue", cls: "bg-destructive/10 text-destructive" },
@@ -28,6 +28,40 @@ const STATE_BADGE: Record<DueState, { label: string; cls: string }> = {
   upcoming: { label: "Upcoming", cls: "bg-muted text-muted-foreground" },
   paid: { label: "Paid", cls: "bg-ok/15 text-ok" },
 };
+
+// Priority order for picking the single state that best describes a card with
+// several open statements.
+const STATE_RANK: Record<DueState, number> = { overdue: 0, soon: 1, upcoming: 2, paid: 3 };
+
+const MS_PER_DAY = 86_400_000;
+
+function startOfDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// Human relative due label for the timeline — "3d overdue", "Due today",
+// "in 5 days", "in 3 weeks". Tone mirrors the due state so urgency reads at a
+// glance. Date-only compare to avoid intra-day off-by-one.
+function relativeDue(due: Date, now: Date): { label: string; cls: string } {
+  const days = Math.round((startOfDay(due) - startOfDay(now)) / MS_PER_DAY);
+
+  if (days < 0) {
+    return { label: `${-days}d overdue`, cls: "text-destructive" };
+  }
+  if (days === 0) {
+    return { label: "Due today", cls: "text-warn" };
+  }
+  if (days <= 7) {
+    return { label: `in ${days} day${days === 1 ? "" : "s"}`, cls: "text-warn" };
+  }
+  if (days <= 28) {
+    const weeks = Math.round(days / 7);
+
+    return { label: `in ${weeks} week${weeks === 1 ? "" : "s"}`, cls: "text-muted-foreground" };
+  }
+
+  return { label: `in ${days} days`, cls: "text-muted-foreground" };
+}
 
 type Row = {
   id: string;
@@ -103,6 +137,12 @@ export default async function DashboardPage() {
   const payable = unpaid.filter((s) => isPayable(s.statementDate, false, now));
   const monthTotals = buildMonthTotals(payable, now);
 
+  // Timeline: the soonest-due open statements, ascending. Includes not-yet-issued
+  // cycles so the user sees what's coming, not just what's payable today.
+  const timeline = [...unpaid]
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+    .slice(0, 6);
+
   // Per-card breakdown across all unpaid statements, most-urgent card first.
   const groups = groupByCard(unpaid);
 
@@ -110,13 +150,13 @@ export default async function DashboardPage() {
   const paidCycles = groupByCycle(paid);
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="animate-enter flex items-end justify-between gap-4">
+    <div className="flex flex-col gap-7">
+      <header className="animate-rise flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">To pay now</p>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
+          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             {formatMonthYear(now)}
-          </h1>
+          </p>
+          <h1 className="mt-1 font-display text-3xl tracking-tight">Dashboard</h1>
         </div>
         <div className="flex items-center gap-2">
           <ImportStatementDialog cards={cards} />
@@ -124,112 +164,45 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      {/* Hero — one figure per currency, never summed across currencies. */}
-      <section
-        className="animate-enter grid gap-3 sm:grid-cols-2"
-        style={{ animationDelay: "60ms" }}
-      >
-        {monthTotals.length === 0 ? (
-          <Card className="bg-ok/[0.05] ring-ok/20 sm:col-span-2">
-            <CardContent className="py-2">
-              <p className="text-lg font-medium text-ok">Nothing to pay right now</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                No issued statements are awaiting payment.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          monthTotals.map(({ currency, total, overdue, upcoming, count }) => {
-            const amount = formatMinor(total, currency).slice(currency.length + 1);
-            const hasOverdue = overdue > 0n;
-            return (
-              <Card key={currency} className="justify-between">
-                <CardContent className="flex flex-col gap-2.5">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      {currency}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {count} statement{count === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  <div className="tabular text-4xl font-semibold leading-none tracking-tight">
-                    {amount}
-                  </div>
-                  <div className="text-sm">
-                    {hasOverdue ? (
-                      <span className="font-medium text-destructive">
-                        {formatMinor(overdue, currency)} overdue
-                        {upcoming > 0n && (
-                          <span className="font-normal text-muted-foreground">
-                            {" "}· {formatMinor(upcoming, currency)} upcoming
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">Nothing overdue</span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
+      {/* Hero — what you owe right now, one figure per currency. Never summed
+          across currencies. */}
+      <section className="animate-rise" style={{ "--i": 1 } as CSSProperties}>
+        <HeroPanel totals={monthTotals} />
       </section>
 
-      {/* Per-card statement balances. */}
-      <section
-        className="animate-enter flex flex-col gap-3"
-        style={{ animationDelay: "120ms" }}
-      >
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Cards
-        </h2>
-        {groups.length === 0 ? (
-          <Card>
-            <CardContent className="py-2 text-sm text-muted-foreground">
-              No unpaid statements. Add one to start tracking.
-            </CardContent>
-          </Card>
-        ) : (
-          groups.map(({ card, rows }) => {
-            const total = rows.reduce((sum, r) => sum + r.amountDue, 0n);
+      {/* Upcoming-dues timeline — the forward view, soonest first. */}
+      {timeline.length > 0 && (
+        <section className="animate-rise flex flex-col gap-3" style={{ "--i": 2 } as CSSProperties}>
+          <SectionLabel>Upcoming dues</SectionLabel>
+          <div className="lift overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="flex flex-col divide-y divide-border">
+              {timeline.map((s) => (
+                <TimelineRow key={s.id} statement={s} now={now} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
-            return (
-              <Card key={card.id} size="sm" className="gap-0! py-0!">
-                <CardGroupHeader card={card} total={total}>
-                  <AddStatementDialog
-                    cards={cards}
-                    defaultCardId={card.id}
-                    trigger={
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="shrink-0"
-                        title={`Add a statement for ${card.name}`}
-                        aria-label={`Add a statement for ${card.name}`}
-                      >
-                        <PlusIcon />
-                      </Button>
-                    }
-                  />
-                </CardGroupHeader>
-                <div className="flex flex-col divide-y divide-border border-t border-border">
-                  {rows.map((s) => (
-                    <StatementRow key={s.id} statement={s} state={dueState(s.dueDate, false, now)} />
-                  ))}
-                </div>
-              </Card>
-            );
-          })
+      {/* Wallet — per-card open balances, each as a real card face. */}
+      <section className="animate-rise flex flex-col gap-3" style={{ "--i": 3 } as CSSProperties}>
+        <SectionLabel>Your cards</SectionLabel>
+        {groups.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card/50 p-6 text-center text-sm text-muted-foreground">
+            No open statements. Add one to start tracking.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {groups.map(({ card, rows }) => (
+              <CardWallet key={card.id} card={card} rows={rows} cards={cards} now={now} />
+            ))}
+          </div>
         )}
       </section>
 
       {paidCycles.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Paid history
-          </h2>
+          <SectionLabel>Paid history</SectionLabel>
           {paidCycles.map((cycle) => (
             <PaidCycleGroup key={cycle.monthKey} cycle={cycle} />
           ))}
@@ -239,126 +212,202 @@ export default async function DashboardPage() {
   );
 }
 
-// Shared header for a card's statement group: color tile, name, issuer/last4, and
-// the card's running total. `children` is an optional trailing action (e.g. the
-// quick-add button); `mutedTotal` quiets the figure for paid history.
-function CardGroupHeader({
-  card,
-  total,
-  mutedTotal = false,
-  children,
-}: {
-  card: Row["card"];
-  total?: bigint;
-  mutedTotal?: boolean;
-  children?: ReactNode;
-}) {
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+      {children}
+    </h2>
+  );
+}
+
+// The outstanding hero. One warm gradient panel; each currency gets a big
+// figure with an overdue/upcoming split beneath it.
+function HeroPanel({ totals }: { totals: MonthTotal[] }) {
+  if (totals.length === 0) {
+    return (
+      <div className="lift flex items-center gap-4 rounded-2xl border border-ok/30 bg-ok/[0.06] p-5 sm:p-6">
+        <div className="grid size-11 place-items-center rounded-full bg-ok/15 text-ok">
+          <CheckIcon className="size-5" />
+        </div>
+        <div>
+          <p className="font-display text-xl text-ok">Nothing to pay right now</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            No issued statements are awaiting payment.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="lift-lg relative overflow-hidden rounded-2xl border border-border bg-card p-5 sm:p-6">
+      {/* Brand wash — faint tangerine bloom in the corner for warmth. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-primary/10 blur-3xl"
+      />
+      <p className="relative text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+        To pay now
+      </p>
+      <div className="relative mt-3 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:gap-x-12">
+        {totals.map(({ currency, total, overdue, upcoming, count }) => {
+          const amount = formatMinor(total, currency).slice(currency.length + 1);
+
+          return (
+            <div key={currency} className="min-w-0">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-muted-foreground">{currency}</span>
+                <span className="tabular text-4xl leading-none font-semibold tracking-tight sm:text-5xl">
+                  {amount}
+                </span>
+              </div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+                {overdue > 0n && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 font-medium text-destructive">
+                    <span className="tabular">{formatMinor(overdue, currency)}</span> overdue
+                  </span>
+                )}
+                {upcoming > 0n && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
+                    <span className="tabular">{formatMinor(upcoming, currency)}</span> upcoming
+                  </span>
+                )}
+                <span className="text-muted-foreground">
+                  · {count} statement{count === 1 ? "" : "s"}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// One row of the upcoming-dues timeline: color dot, card + cycle, relative due,
+// amount. Compact and scannable — the forward-looking glance.
+function TimelineRow({ statement: s, now }: { statement: Row; now: Date }) {
+  const rel = relativeDue(s.dueDate, now);
+  const amount = formatMinor(s.amountDue, s.currency).slice(s.currency.length + 1);
+
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <span
         className="size-2.5 shrink-0 rounded-full ring-2 ring-foreground/5"
-        style={{ backgroundColor: card.color }}
+        style={{ backgroundColor: s.card.color }}
         aria-hidden
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{card.name}</div>
-        {(card.issuer || card.last4) && (
-          <div className="mt-0.5 truncate text-xs text-muted-foreground">
-            {card.issuer ?? ""}
-            {card.issuer && card.last4 ? " · " : ""}
-            {card.last4 ? `•••• ${card.last4}` : ""}
-          </div>
-        )}
-        {/* The card's recurring schedule lives here, not on every row — the
-            statement / due day-of-month is identical across cycles. */}
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span>
-            Statement{" "}
-            <span className="tabular font-medium text-foreground/75">
-              {ordinalDay(card.statementDay)}
-            </span>
-          </span>
-          <span aria-hidden className="text-foreground/30">
-            →
-          </span>
-          <span>
-            Due{" "}
-            <span className="tabular font-medium text-foreground/75">
-              {ordinalDay(card.paymentDay)}
-            </span>
-          </span>
+        <div className="truncate text-sm font-medium">{s.card.name}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+          {formatCycleMonth(s.statementDate)}
         </div>
       </div>
-      {total !== undefined && (
-        <div
-          className={`tabular shrink-0 text-sm font-semibold tracking-tight ${
-            mutedTotal ? "text-muted-foreground" : "text-foreground"
-          }`}
-        >
-          {formatMinor(total, card.currency)}
-        </div>
-      )}
-      {children}
+      <div className={`shrink-0 text-xs font-medium ${rel.cls}`}>{rel.label}</div>
+      <div className="tabular w-24 shrink-0 text-right text-sm font-semibold tracking-tight">
+        {amount}
+      </div>
     </div>
   );
 }
 
-function StatementRow({
-  statement: s,
-  state,
-  muted = false,
+// A wallet card: the colored card face, its running total + schedule, then the
+// open statement rows with their actions, then a quick-add. The whole thing
+// clips to one rounded surface so the face reads as the lid of the stack.
+function CardWallet({
+  card,
+  rows,
+  cards,
+  now,
 }: {
-  statement: Row;
-  state: DueState;
-  muted?: boolean;
+  card: Row["card"];
+  rows: Row[];
+  cards: { id: string; name: string; issuer: string | null }[];
+  now: Date;
 }) {
+  const total = rows.reduce((sum, r) => sum + r.amountDue, 0n);
+  const worst = rows
+    .map((r) => dueState(r.dueDate, false, now))
+    .reduce((a, b) => (STATE_RANK[b] < STATE_RANK[a] ? b : a), "upcoming" as DueState);
+  const badge = STATE_BADGE[worst];
+  const amount = formatMinor(total, card.currency).slice(card.currency.length + 1);
+
+  return (
+    <div className="lift flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
+      <CardFace
+        color={card.color}
+        name={card.name}
+        issuer={card.issuer}
+        last4={card.last4}
+        className="rounded-none"
+        topRight={
+          <span className={`rounded-full px-2 py-0.5 text-[0.7rem] font-semibold ${badge.cls}`}>
+            {badge.label}
+          </span>
+        }
+      >
+        <div className="flex items-end justify-between gap-2">
+          <div>
+            <div className="text-[0.7rem] tracking-wide uppercase opacity-70">Owed</div>
+            <div className="tabular text-2xl font-semibold tracking-tight">
+              <span className="mr-1 text-sm opacity-70">{card.currency}</span>
+              {amount}
+            </div>
+          </div>
+          <div className="text-right text-[0.7rem] leading-tight opacity-75">
+            <div>
+              stmt <span className="tabular">{ordinalDay(card.statementDay)}</span>
+            </div>
+            <div>
+              due <span className="tabular">{ordinalDay(card.paymentDay)}</span>
+            </div>
+          </div>
+        </div>
+      </CardFace>
+
+      <div className="flex flex-col divide-y divide-border">
+        {rows.map((s) => (
+          <StatementRow key={s.id} statement={s} state={dueState(s.dueDate, false, now)} />
+        ))}
+      </div>
+
+      <div className="border-t border-border p-2">
+        <AddStatementDialog
+          cards={cards}
+          defaultCardId={card.id}
+          trigger={
+            <Button variant="ghost" size="sm" className="w-full text-muted-foreground">
+              <PlusIcon />
+              Add statement
+            </Button>
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function StatementRow({ statement: s, state }: { statement: Row; state: DueState }) {
   const badge = STATE_BADGE[state];
-  const amountCls = `tabular shrink-0 font-semibold tracking-tight ${
-    muted ? "text-muted-foreground" : "text-foreground"
-  }`;
 
-  // The card header carries the currency, so the per-row figure drops the code
-  // and just reads as a number — less "MYR MYR MYR" repeating down the list.
+  // The card face carries the currency, so the per-row figure drops the code
+  // and just reads as a number.
   const amount = formatMinor(s.amountDue, s.currency).slice(s.currency.length + 1);
-
-  // The concrete statement / due dates now live on the card header (same day
-  // every cycle); each row only needs to say which cycle it is.
   const cycle = formatCycleMonth(s.statementDate);
 
   return (
-    <div className="group/row px-4 py-2.5 transition-colors hover:bg-muted/40 sm:py-3">
-      {/* Mobile: cycle shares a line with the amount; the status badge sits below
-          the cycle, actions below the amount. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 sm:hidden">
-        <div className="col-start-1 row-start-1 truncate text-sm font-medium">{cycle}</div>
-        <div className={`col-start-2 row-start-1 justify-self-end text-sm ${amountCls}`}>
-          {amount}
-        </div>
-        <Badge
-          className={`${badge.cls} col-start-1 row-start-2 justify-self-start border-transparent`}
-        >
-          {badge.label}
-        </Badge>
-        <div className="col-start-2 row-start-2 flex items-center justify-self-end gap-0.5">
-          <StatementActions statement={s} />
-        </div>
-      </div>
-
-      {/* Desktop: single line, status badge on the far left. */}
-      <div className="hidden items-center gap-3 sm:flex">
-        <Badge className={`${badge.cls} shrink-0 border-transparent`}>{badge.label}</Badge>
-        <div className="min-w-0 flex-1 truncate text-sm font-medium">{cycle}</div>
-        <div className={`text-base ${amountCls}`}>{amount}</div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <StatementActions statement={s} />
-        </div>
+    <div className="group/row flex items-center gap-2.5 px-3 py-2.5 transition-colors hover:bg-muted/40">
+      <Badge className={`${badge.cls} shrink-0 border-transparent`}>{badge.label}</Badge>
+      <div className="min-w-0 flex-1 truncate text-sm font-medium">{cycle}</div>
+      <div className="tabular shrink-0 text-sm font-semibold tracking-tight">{amount}</div>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <StatementActions statement={s} />
       </div>
     </div>
   );
 }
 
-// Toggle (mark paid / unpay), edit, and delete for one statement. The primary
-// button keeps its word on desktop and drops to an icon on mobile.
+// Toggle (mark paid / unpay), edit, and delete for one statement.
 function StatementActions({ statement: s }: { statement: Row }) {
   const toggleLabel = s.paid ? "Move back to unpaid" : "Mark this statement paid";
 
@@ -369,13 +418,12 @@ function StatementActions({ statement: s }: { statement: Row }) {
         <Button
           type="submit"
           variant={s.paid ? "ghost" : "default"}
-          size="sm"
+          size="icon-sm"
           title={toggleLabel}
           aria-label={toggleLabel}
           className={s.paid ? "text-muted-foreground" : ""}
         >
           {s.paid ? <Undo2Icon /> : <CheckIcon />}
-          <span className="hidden sm:inline">{s.paid ? "Unpay" : "Mark paid"}</span>
         </Button>
       </form>
       <EditStatementDialog
@@ -416,13 +464,11 @@ type CycleGroup = {
 };
 
 // A paid cycle rendered as a native <details> accordion, collapsed by default.
-// The summary shows the cycle and its per-currency total(s); expanding reveals
-// one row per card.
 function PaidCycleGroup({ cycle }: { cycle: CycleGroup }) {
   const count = cycle.rows.length;
 
   return (
-    <Card size="sm" className="gap-0! py-0!">
+    <div className="lift overflow-hidden rounded-2xl border border-border bg-card">
       <details className="group/cycle">
         <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
           <ChevronDownIcon
@@ -447,20 +493,18 @@ function PaidCycleGroup({ cycle }: { cycle: CycleGroup }) {
           ))}
         </div>
       </details>
-    </Card>
+    </div>
   );
 }
 
-// A single paid statement inside a cycle group. Grouping is by cycle now, so the
-// row identifies its card; the currency stays on the figure because a cycle can
-// mix currencies.
+// A single paid statement inside a cycle group.
 function PaidCardRow({ statement: s }: { statement: Row }) {
   const meta = [s.card.issuer, s.card.last4 ? `•••• ${s.card.last4}` : null]
     .filter(Boolean)
     .join(" · ");
 
   return (
-    <div className="group/row flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40 sm:py-3">
+    <div className="group/row flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40">
       <span
         className="size-2.5 shrink-0 rounded-full ring-2 ring-foreground/5"
         style={{ backgroundColor: s.card.color }}
@@ -512,9 +556,7 @@ function buildMonthTotals(rows: Row[], now: Date): MonthTotal[] {
 }
 
 // Group statements by card, ordering cards by their soonest due date so the most
-// urgent card surfaces first. Statements arrive due-date descending (latest first)
-// and keep that order within each card; card ordering uses each group's min due
-// date so it's independent of the row order.
+// urgent card surfaces first.
 function groupByCard(rows: Row[]): { card: Row["card"]; rows: Row[] }[] {
   const map = new Map<string, { card: Row["card"]; rows: Row[] }>();
 
@@ -524,24 +566,19 @@ function groupByCard(rows: Row[]): { card: Row["card"]; rows: Row[] }[] {
     map.set(s.card.id, group);
   }
 
-  const minDue = (rows: Row[]) =>
-    Math.min(...rows.map((r) => r.dueDate.getTime()));
+  const minDue = (rows: Row[]) => Math.min(...rows.map((r) => r.dueDate.getTime()));
 
   return [...map.values()].sort((a, b) => minDue(a.rows) - minDue(b.rows));
 }
 
-// Group statements by statement cycle (yyyy-MM), newest cycle first. Within a
-// cycle rows are ordered by card name, and totals are split per currency —
-// summing across currencies is financially meaningless. The yyyy-MM key sorts
-// chronologically as a plain string, so no date math is needed for ordering.
+// Group statements by statement cycle (yyyy-MM), newest cycle first.
 function groupByCycle(rows: Row[]): CycleGroup[] {
   const map = new Map<string, { monthKey: string; label: string; rows: Row[] }>();
 
   for (const s of rows) {
     const monthKey = monthKeyOf(s.statementDate);
     const group =
-      map.get(monthKey) ??
-      { monthKey, label: formatCycleMonth(s.statementDate), rows: [] };
+      map.get(monthKey) ?? { monthKey, label: formatCycleMonth(s.statementDate), rows: [] };
     group.rows.push(s);
     map.set(monthKey, group);
   }

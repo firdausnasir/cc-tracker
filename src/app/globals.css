@@ -5,57 +5,63 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Light fintech palette. Warm-paper background, pure-white cards that lift on
- * top of it, a confident indigo-violet primary (the product signature), and
- * three committed semantic tokens for statement status.
+ * "Wallet" palette — warm fintech. A cream-paper ground, crisp white cards
+ * lifting on soft warm shadows, a confident tangerine/coral brand action color
+ * (friendly-premium, deliberately not the AI-default violet), and three
+ * committed semantic tokens for statement status. The shell stays warm-neutral
+ * so each card's own user-chosen color is the thing that carries hue.
  */
 :root {
-  --radius: 0.8rem;
+  --radius: 0.85rem;
 
-  --background: oklch(0.985 0.004 95);
-  --foreground: oklch(0.205 0.02 275);
+  --background: oklch(0.985 0.008 75);
+  --foreground: oklch(0.24 0.012 55);
 
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.02 275);
+  --card-foreground: oklch(0.24 0.012 55);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.02 275);
+  --popover-foreground: oklch(0.24 0.012 55);
 
-  --primary: oklch(0.52 0.215 277);
-  --primary-foreground: oklch(0.99 0.005 277);
+  /* Tangerine / coral — the one committed accent. Actions, focus, urgency-neutral. */
+  --primary: oklch(0.66 0.17 40);
+  --primary-foreground: oklch(0.99 0.012 80);
 
-  --secondary: oklch(0.965 0.012 277);
-  --secondary-foreground: oklch(0.36 0.06 277);
+  --secondary: oklch(0.955 0.012 70);
+  --secondary-foreground: oklch(0.33 0.02 55);
 
-  --muted: oklch(0.965 0.006 270);
-  --muted-foreground: oklch(0.455 0.03 270);
+  --muted: oklch(0.96 0.009 72);
+  --muted-foreground: oklch(0.5 0.02 58);
 
-  --accent: oklch(0.95 0.02 277);
-  --accent-foreground: oklch(0.36 0.08 277);
+  --accent: oklch(0.94 0.022 55);
+  --accent-foreground: oklch(0.34 0.04 45);
 
-  --destructive: oklch(0.585 0.214 22);
+  --destructive: oklch(0.58 0.21 27);
 
-  --border: oklch(0.915 0.006 270);
-  --input: oklch(0.915 0.006 270);
-  --ring: oklch(0.52 0.215 277);
+  --border: oklch(0.905 0.009 72);
+  --input: oklch(0.905 0.009 72);
+  --ring: oklch(0.66 0.17 40);
 
   /* Statement-status semantics (custom, mapped into @theme below). */
-  --ok: oklch(0.58 0.13 156); /* paid — green */
-  --warn: oklch(0.66 0.13 67); /* due soon — amber */
+  --ok: oklch(0.6 0.13 158); /* paid — warm-leaning green */
+  --warn: oklch(0.72 0.15 68); /* due soon — amber */
 
-  --chart-1: oklch(0.52 0.215 277);
-  --chart-2: oklch(0.58 0.13 156);
-  --chart-3: oklch(0.66 0.13 67);
-  --chart-4: oklch(0.585 0.214 22);
-  --chart-5: oklch(0.62 0.1 230);
+  /* Warm shadow color, used by the .lift / tile utilities. */
+  --shadow-color: 30 25% 45%;
 
-  --sidebar: oklch(0.985 0.004 95);
-  --sidebar-foreground: oklch(0.205 0.02 275);
-  --sidebar-primary: oklch(0.52 0.215 277);
-  --sidebar-primary-foreground: oklch(0.99 0.005 277);
-  --sidebar-accent: oklch(0.95 0.02 277);
-  --sidebar-accent-foreground: oklch(0.36 0.08 277);
-  --sidebar-border: oklch(0.915 0.006 270);
-  --sidebar-ring: oklch(0.52 0.215 277);
+  --chart-1: oklch(0.66 0.17 40);
+  --chart-2: oklch(0.6 0.13 158);
+  --chart-3: oklch(0.72 0.15 68);
+  --chart-4: oklch(0.58 0.21 27);
+  --chart-5: oklch(0.55 0.12 250);
+
+  --sidebar: oklch(0.975 0.01 75);
+  --sidebar-foreground: oklch(0.24 0.012 55);
+  --sidebar-primary: oklch(0.66 0.17 40);
+  --sidebar-primary-foreground: oklch(0.99 0.012 80);
+  --sidebar-accent: oklch(0.94 0.022 55);
+  --sidebar-accent-foreground: oklch(0.34 0.04 45);
+  --sidebar-border: oklch(0.905 0.009 72);
+  --sidebar-ring: oklch(0.66 0.17 40);
 }
 
 @theme inline {
@@ -96,51 +102,54 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* One sans voice: headings and body share Hanken Grotesk. The font-display /
-   * font-heading utilities are kept (semantic intent) but resolve to the sans. */
-  --font-sans: var(--font-hanken);
-  --font-heading: var(--font-hanken);
-  --font-display: var(--font-hanken);
-  --font-mono: var(--font-geist-mono);
+  /* Three voices: a chunky characterful grotesque for display (Bricolage —
+   * wordmark, headings, big figures), a warm geometric sans for body/UI
+   * (Figtree), and a mono for ledger figures (IBM Plex Mono). */
+  --font-sans: var(--font-figtree);
+  --font-heading: var(--font-bricolage);
+  --font-display: var(--font-bricolage);
+  --font-mono: var(--font-plex);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.45);
+  --radius-md: calc(var(--radius) * 0.62);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-3xl: calc(var(--radius) * 2);
+  --radius-4xl: calc(var(--radius) * 2.4);
 }
 
 .dark {
-  --background: oklch(0.17 0.015 275);
-  --foreground: oklch(0.97 0.005 95);
-  --card: oklch(0.21 0.02 275);
-  --card-foreground: oklch(0.97 0.005 95);
-  --popover: oklch(0.21 0.02 275);
-  --popover-foreground: oklch(0.97 0.005 95);
-  --primary: oklch(0.66 0.19 277);
-  --primary-foreground: oklch(0.17 0.015 275);
-  --secondary: oklch(0.28 0.03 277);
-  --secondary-foreground: oklch(0.97 0.005 95);
-  --muted: oklch(0.27 0.02 275);
-  --muted-foreground: oklch(0.76 0.022 275);
-  --accent: oklch(0.3 0.04 277);
-  --accent-foreground: oklch(0.97 0.005 95);
-  --destructive: oklch(0.7 0.19 22);
-  --border: oklch(1 0 0 / 10%);
+  /* Warm espresso dark, not cool navy. */
+  --background: oklch(0.205 0.012 50);
+  --foreground: oklch(0.95 0.008 78);
+  --card: oklch(0.248 0.014 52);
+  --card-foreground: oklch(0.95 0.008 78);
+  --popover: oklch(0.248 0.014 52);
+  --popover-foreground: oklch(0.95 0.008 78);
+  --primary: oklch(0.73 0.16 46);
+  --primary-foreground: oklch(0.2 0.02 45);
+  --secondary: oklch(0.3 0.016 50);
+  --secondary-foreground: oklch(0.95 0.008 78);
+  --muted: oklch(0.29 0.014 50);
+  --muted-foreground: oklch(0.74 0.018 65);
+  --accent: oklch(0.34 0.03 48);
+  --accent-foreground: oklch(0.95 0.008 78);
+  --destructive: oklch(0.68 0.19 27);
+  --border: oklch(1 0 0 / 11%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.66 0.19 277);
-  --ok: oklch(0.7 0.14 156);
-  --warn: oklch(0.78 0.14 75);
-  --sidebar: oklch(0.21 0.02 275);
-  --sidebar-foreground: oklch(0.97 0.005 95);
-  --sidebar-primary: oklch(0.66 0.19 277);
-  --sidebar-primary-foreground: oklch(0.17 0.015 275);
-  --sidebar-accent: oklch(0.3 0.04 277);
-  --sidebar-accent-foreground: oklch(0.97 0.005 95);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.66 0.19 277);
+  --ring: oklch(0.73 0.16 46);
+  --ok: oklch(0.7 0.13 160);
+  --warn: oklch(0.78 0.14 72);
+  --shadow-color: 30 12% 4%;
+  --sidebar: oklch(0.225 0.013 50);
+  --sidebar-foreground: oklch(0.95 0.008 78);
+  --sidebar-primary: oklch(0.73 0.16 46);
+  --sidebar-primary-foreground: oklch(0.2 0.02 45);
+  --sidebar-accent: oklch(0.34 0.03 48);
+  --sidebar-accent-foreground: oklch(0.95 0.008 78);
+  --sidebar-border: oklch(1 0 0 / 11%);
+  --sidebar-ring: oklch(0.73 0.16 46);
 }
 
 @layer base {
@@ -149,13 +158,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* A whisper of the primary in the top-right — atmosphere, not decoration. */
-    background-image: radial-gradient(
-      900px 480px at 88% -12%,
-      color-mix(in oklch, var(--primary) 14%, transparent),
-      transparent 62%
-    );
-    background-attachment: fixed;
     font-family: var(--font-sans), system-ui, sans-serif;
   }
   html {
@@ -169,23 +171,47 @@
   p {
     text-wrap: pretty;
   }
+  /* Display grotesque: tight tracking + heavier weight gives the chunky,
+   * confident wallet voice. */
+  .font-display,
+  .font-heading {
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
 }
 
 /* Money should always read as data — fixed-width digits, no jitter. */
 .tabular {
   font-family: var(--font-mono), monospace;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 /*
- * One orchestrated page-load reveal: sections fade up in sequence via a small
- * staggered delay set inline. Disabled entirely under reduced-motion.
+ * Soft warm elevation. Tiles and panels lift on a tinted shadow rather than a
+ * flat gray box-shadow, so the surface feels paper-on-paper, not glassy.
  */
-@keyframes enter-up {
+.lift {
+  box-shadow:
+    0 1px 2px -1px hsl(var(--shadow-color) / 0.18),
+    0 4px 12px -4px hsl(var(--shadow-color) / 0.16);
+}
+.lift-lg {
+  box-shadow:
+    0 2px 4px -2px hsl(var(--shadow-color) / 0.2),
+    0 12px 28px -8px hsl(var(--shadow-color) / 0.22);
+}
+
+/*
+ * Load orchestration. One staggered rise on first paint — content settles
+ * upward in sequence, which reads as "assembled", not "appeared". Children set
+ * their own --i for the cascade. Hover-lift is a separate, springy transition
+ * applied per element. All motion is disabled under reduced-motion.
+ */
+@keyframes enter-rise {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -193,11 +219,26 @@
   }
 }
 
+@keyframes enter-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-rise {
+  animation: enter-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
 .animate-enter {
-  animation: enter-up 0.45s cubic-bezier(0.2, 0, 0, 1) both;
+  animation: enter-fade 0.3s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .animate-rise,
   .animate-enter {
     animation: none;
   }

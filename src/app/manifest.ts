@@ -1,8 +1,8 @@
 import type { MetadataRoute } from "next";
 
 // Web app manifest — App Router auto-serves this at /manifest.webmanifest and
-// injects <link rel="manifest">. Colors mirror the light-fintech palette:
-// brand indigo status bar over a warm-paper splash. Icons are full-bleed so
+// injects <link rel="manifest">. Colors mirror the warm "Wallet" palette:
+// tangerine brand status bar over a cream-paper splash. Icons are full-bleed so
 // they double as maskable icons on Android.
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -12,8 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/dashboard",
     scope: "/",
     display: "standalone",
-    background_color: "#fbfaf7",
-    theme_color: "#5b3fd6",
+    background_color: "#faf7f2",
+    theme_color: "#f2682f",
     icons: [
       {
         src: "/icon-192x192.png",
