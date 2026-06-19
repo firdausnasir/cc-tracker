@@ -33,14 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env
 
-# cloudflare / opennext
-/.open-next/
-/.wrangler/
-.dev.vars
+# docker sqlite volume (host bind mount — persists across container removal)
+/data/
 
-# prisma local sqlite (CLI/migrate-diff only)
-/prisma/*.db
-/prisma/*.db-journal
+# prisma local sqlite (CLI / migrate dev only)
+**/*.db
+**/*.db-journal
 
 # typescript
 *.tsbuildinfo

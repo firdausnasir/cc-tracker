@@ -18,7 +18,10 @@ export type StatementDraft = {
   currency: string | null;
 };
 
-export type ImportState = { error: string } | { draft: StatementDraft } | null;
+export type ImportState =
+  | { error: string }
+  | { drafts: StatementDraft[] }
+  | null;
 
 // 8 MB ceiling — generous for a statement PDF, bounded so we don't base64 a
 // huge upload into a model request.
@@ -69,23 +72,19 @@ export async function extractStatementAction(
 
   const forMatch: CardForMatch[] = cards;
 
-  let draft: StatementDraft;
+  let drafts: StatementDraft[];
   try {
     const extracted = await extractStatementFromPdf(bytes, forMatch);
 
-    // Only accept a suggested card that actually belongs to this user — an id
-    // alone must never preselect another account's card.
-    const suggestedCardId =
-      extracted.cardId && cards.some((c) => c.id === extracted.cardId)
-        ? extracted.cardId
-        : null;
-
-    draft = {
-      cardId: suggestedCardId,
-      month: extracted.month ?? null,
-      amount: extracted.amount ?? null,
-      currency: extracted.currency ?? null,
-    };
+    drafts = extracted.map((s) => ({
+      // Only accept a suggested card that actually belongs to this user — an id
+      // alone must never preselect another account's card.
+      cardId:
+        s.cardId && cards.some((c) => c.id === s.cardId) ? s.cardId : null,
+      month: s.month ?? null,
+      amount: s.amount ?? null,
+      currency: s.currency ?? null,
+    }));
   } catch (error) {
     if (error instanceof AiExtractError) {
       return { error: error.message };
@@ -95,5 +94,5 @@ export async function extractStatementAction(
     return { error: "Something went wrong reading that PDF." };
   }
 
-  return { draft };
+  return { drafts };
 }

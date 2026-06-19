@@ -25,50 +25,52 @@ deprecation notices. Do not assume Next.js 13/14 patterns.
 ## Commands
 
 ```bash
-npm run dev              # next dev — local bindings via initOpenNextCloudflareForDev
+npm run dev              # next dev
 npm run build            # prisma generate && next build
+npm run start            # next start (production server)
 npm run lint             # eslint
 npm run typecheck        # tsc --noEmit
-npm run preview          # opennextjs-cloudflare build && preview — runs on the real workerd runtime
-npm run deploy           # opennextjs-cloudflare build && deploy to Cloudflare Workers
+docker compose up -d     # build image, run migrations, serve on :3000
+docker compose build     # build the production image
 ```
 
 **Verification (no test framework configured):** the proving command is
-`npm run typecheck && npm run lint`. For runtime behavior, `npm run preview`
-exercises the actual Workers/D1 runtime — `npm run dev` can mask workerd-only
-breakage.
+`npm run typecheck && npm run lint`. For deployment behavior, `docker compose
+build` proves the production image; `docker compose up -d` then exercises the
+real runtime (boot-time migrations + `next start`).
 
-### Database (Cloudflare D1)
+### Database (Prisma + SQLite)
 
 ```bash
-npm run db:migrate:local     # wrangler d1 migrations apply cc-tracker --local
-npm run db:migrate:remote    # apply to remote D1
-npm run cf-typegen           # regenerate cloudflare-env.d.ts from wrangler bindings
+npm run db:migrate:dev       # prisma migrate dev — create + apply a migration locally
+npm run db:migrate           # prisma migrate deploy — apply committed migrations (used on container start)
+npm run db:generate          # prisma generate
 ```
 
-Migrations live in `migrations/` and use **D1's own migration system**, not
-Prisma Migrate. To add one: scaffold with
-`npx wrangler d1 migrations create cc-tracker <name>`, then fill it with the SQL
-diff from the Prisma schema via
-`npx prisma migrate diff --from-local-d1 --to-schema-datamodel prisma/schema.prisma --script`.
-`prisma/schema.prisma` is the source of truth for the data model; the generated
-SQL is the migration.
+Migrations live in `prisma/migrations/` and use **Prisma Migrate**.
+`prisma/schema.prisma` is the source of truth: edit it, then run
+`npm run db:migrate:dev` to generate the migration. In Docker, the container
+entrypoint runs `prisma migrate deploy` on every start (idempotent).
 
 ## Architecture
 
 A personal credit-card statement tracker. Multi-user, isolated by `userId` at
-every query. Deployed to **Cloudflare Workers** via the **OpenNext** adapter
-(`@opennextjs/cloudflare`), backed by **Cloudflare D1** (SQLite).
+every query. Self-hosted via **Docker Compose** — a single container running the
+Next.js **standalone** server (`output: "standalone"`, served via
+`node server.js`), backed by **SQLite** at `./data/cc.db` (a host bind mount, so
+the DB persists across container removal and rebuilds). Migrations apply on
+startup via `docker-entrypoint.sh`, using an isolated prisma CLI kept out of the
+standalone bundle to keep the image small.
 
-**Runtime data access — per-request Prisma client.** The D1 binding is
-request-scoped on Workers, so there is no global client. Always obtain Prisma
-via `await getPrisma()` (`src/lib/prisma.ts`), which builds a `PrismaClient`
-from the `DB` binding using the `@prisma/adapter-d1` driver adapter. The
-`DATABASE_URL` in `.env` is used **only** by the Prisma CLI (`generate`,
-`migrate diff`) — never at runtime.
+**Runtime data access — shared Prisma client.** Obtain Prisma via
+`await getPrisma()` (`src/lib/prisma.ts`), which returns a process-wide
+`PrismaClient` singleton reading `DATABASE_URL` (a `file:` SQLite path). The
+`getPrisma()` accessor is kept `async` for historical call-site compatibility;
+there is no per-request binding. `DATABASE_URL` is set by compose to the volume
+path (`file:/data/cc.db`).
 
-**No transactions.** D1 does not support transactions, so Prisma `$transaction`
-is unavailable. Write logic that does not depend on it.
+**No transactions.** The app avoids Prisma `$transaction` (a constraint carried
+over from the original D1 backend). Write logic that does not depend on it.
 
 **Auth — Auth.js v5 (NextAuth), Credentials + JWT.** Config in `src/auth.ts`:
 email/password via bcrypt (constant-time compare against a throwaway hash when
@@ -114,7 +116,7 @@ the due date into the following month; `clampDay` keeps a 31st-of-month card
 valid in February. Editing a card's schedule does **not** rewrite existing
 statements' stored dates — they stay historically accurate to their cycle.
 `dueState()` classifies a row as paid/overdue/soon/upcoming (date-only compare).
-Presentation timezone is MYT (`Asia/Kuala_Lumpur`); the worker clock is UTC.
+Presentation timezone is MYT (`Asia/Kuala_Lumpur`); the server clock is UTC.
 
 **UI.** Tailwind CSS v4 + shadcn (`base-nova` style, components in
 `src/components/ui/`, base-ui primitives). Pages are React Server Components that

@@ -5,15 +5,15 @@ statement — how much is due and by when — and see what you still owe this cy
 v1 is fully manual entry.
 
 Multi-user: anyone can sign up, and every account is isolated by `userId` at
-every query. Deployed to Cloudflare Workers with a Cloudflare D1 (SQLite)
-database.
+every query. Self-hosted via Docker Compose, backed by a SQLite database on a
+host volume.
 
 ## Stack
 
-- **Next.js 16** (App Router) + React 19 + TypeScript
-- **Cloudflare Workers** via the **OpenNext** adapter (`@opennextjs/cloudflare`)
+- **Next.js 16** (App Router, standalone output) + React 19 + TypeScript
+- **Docker Compose** — single ~415 MB Alpine container
 - **Auth.js v5** (NextAuth) — email/password (Credentials), JWT sessions
-- **Prisma 6** → **Cloudflare D1** via the `@prisma/adapter-d1` driver adapter
+- **Prisma 6** → **SQLite** (file on a mounted volume)
 - **Tailwind CSS v4** + shadcn (`base-nova`, base-ui primitives)
 - Money stored as **bigint minor units** (sen) + ISO-4217 currency — never float.
 
@@ -41,65 +41,72 @@ database.
 - Light/dark theme.
 - Installable as a PWA (home-screen / desktop install prompt).
 
-Presentation timezone is MYT (`Asia/Kuala_Lumpur`); the worker clock is UTC.
+Presentation timezone is MYT (`Asia/Kuala_Lumpur`); the server clock is UTC.
 
-## Local setup
+## Deploy (Docker Compose)
+
+The fastest path — one command builds the image, applies migrations, and serves
+on port 3000.
+
+1. **Configure env**
+   ```bash
+   cp .env.example .env
+   ```
+   Set at least `AUTH_SECRET` (generate with `openssl rand -base64 32`). For PDF
+   import, also set `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`.
+   `DATABASE_URL` is overridden by compose to the volume path — leave it.
+
+2. **Up**
+   ```bash
+   docker compose up -d
+   ```
+   Open <http://localhost:3000> → you'll be sent to `/signup`. Create an account
+   and you're in.
+
+The SQLite database is a **host bind mount** at `./data/cc.db`. It persists
+across `docker compose down` and image rebuilds — your data lives on this
+machine, not inside the container. Back it up by copying `./data`; reset by
+deleting `./data/cc.db`. Migrations run automatically on every container start
+(`prisma migrate deploy`, a no-op when already current).
+
+## Local development
 
 1. **Install**
    ```bash
    npm install
    ```
 
-2. **Configure env**
-   - `.env` — `DATABASE_URL="file:./prisma/dev.db"` (used only by the Prisma
-     CLI for `generate` / `migrate diff`; the running app uses the D1 binding).
-   - `.dev.vars` — `NEXTJS_ENV=development` and `AUTH_SECRET=<random>`
-     (generate with `openssl rand -base64 32`). This file is gitignored.
-     For PDF import, also set `OPENAI_BASE_URL`, `OPENAI_API_KEY` and
-     `OPENAI_MODEL` (see `.dev.vars.example`). In production set these via
-     `wrangler secret put <NAME>`.
+2. **Configure env** — copy `.env.example` to `.env`; for local dev point
+   `DATABASE_URL` at a file under `prisma/` (e.g. `file:./prisma/dev.db`) and set
+   `AUTH_SECRET`.
 
-3. **Create the local D1 database and apply migrations**
+3. **Apply migrations and run**
    ```bash
-   npm run db:migrate:local   # wrangler d1 migrations apply cc-tracker --local
+   npm run db:migrate:dev     # prisma migrate dev — creates/updates the local DB
+   npm run dev                # next dev
    ```
 
-4. **Run**
-   ```bash
-   npm run dev                # next dev (bindings via initOpenNextCloudflareForDev)
-   # or, against the real Workers runtime:
-   npm run preview            # opennextjs-cloudflare build && preview
-   ```
-   Open the served URL → you'll be sent to `/signup`. Create an account and
-   you're in.
+## Database & migrations (Prisma + SQLite)
 
-## Database & migrations (Cloudflare D1)
+`prisma/schema.prisma` is the source of truth; migrations live in
+`prisma/migrations/` and use **Prisma Migrate**.
 
-D1 has its own migration system (`wrangler d1 migrations`); Prisma generates the
-SQL via `prisma migrate diff`. `prisma/schema.prisma` is the source of truth for
-the data model; migrations live in `migrations/`.
-
-> **No transactions:** D1 does not support transactions, so Prisma `$transaction`
-> is unavailable. This app does not use it.
+> **No transactions:** the app avoids Prisma `$transaction` (a constraint carried
+> over from the original D1 backend); writes do not depend on it.
 
 ```bash
-# 1. scaffold an empty migration file
-npx wrangler d1 migrations create cc-tracker <name>
-# 2. fill it with the SQL diff from the Prisma schema
-#    (first migration uses --from-empty; later ones use --from-local-d1)
-npx prisma migrate diff --from-local-d1 \
-  --to-schema-datamodel prisma/schema.prisma --script \
-  --output migrations/<NNNN>_<name>.sql
-# 3. apply
-npm run db:migrate:local      # local SQLite (.wrangler/state)
+# add/alter the schema in prisma/schema.prisma, then:
+npm run db:migrate:dev        # creates a new migration + applies it locally
+# in containers, migrations are applied on startup via:
+npm run db:migrate            # prisma migrate deploy
 ```
 
 ## Verify
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run lint        # eslint
-npm run preview     # opennextjs-cloudflare build && preview (Workers runtime)
+npm run typecheck     # tsc --noEmit
+npm run lint          # eslint
+docker compose build  # prove the production image builds
 ```
 
 ## Roadmap (deferred from v1)
