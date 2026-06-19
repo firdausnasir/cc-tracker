@@ -14,18 +14,18 @@ import {
 import {
   SortableContext,
   arrayMove,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 import { deleteCardAction, reorderCardsAction } from "@/app/actions/cards";
+import { CardFace } from "@/components/card-face";
 import { EditCardDialog } from "@/components/edit-card-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { ordinalDay } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 
 export type CardRow = {
   id: string;
@@ -39,70 +39,65 @@ export type CardRow = {
   statementCount: number;
 };
 
-function CardMeta({ card }: { card: CardRow }) {
-  return (
-    <div className="mt-0.5 text-sm text-muted-foreground">
-      {card.issuer ? `${card.issuer} · ` : ""}
-      {card.last4 ? `•••• ${card.last4} · ` : ""}
-      Statement{" "}
-      <span className="font-medium text-foreground">{ordinalDay(card.statementDay)}</span>
-      {" · "}Pay{" "}
-      <span className="font-medium text-foreground">{ordinalDay(card.paymentDay)}</span>
-      {" · "}
-      <span className="font-medium text-foreground">{card.currency}</span>
-      {" · "}
-      {card.statementCount} statement
-      {card.statementCount === 1 ? "" : "s"}
-    </div>
-  );
-}
-
-function SortableCardRow({ card }: { card: CardRow }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: card.id });
+function SortableCardTile({ card }: { card: CardRow }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: card.id,
+  });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    // Lift the row above its siblings while it travels so it never slides under
-    // an adjacent card mid-drag.
+    // Lift the tile above its siblings while it travels.
     zIndex: isDragging ? 10 : undefined,
   };
 
   return (
-    <Card
+    <div
       ref={setNodeRef}
-      size="sm"
       style={style}
-      className={
-        isDragging
-          ? "relative shadow-lg ring-1 ring-foreground/10 [&]:opacity-90"
-          : "relative"
-      }
+      className={`flex flex-col overflow-hidden rounded-2xl border border-border bg-card ${
+        isDragging ? "lift-lg opacity-95 ring-1 ring-foreground/10" : "lift"
+      }`}
     >
-      <CardContent className="flex items-start gap-2">
-        {/* Drag handle owns the drag gesture so the Edit/Delete controls and any
-            text stay independently interactive. */}
-        <button
-          type="button"
-          aria-label={`Reorder ${card.name}`}
-          className="mt-0.5 -ml-1 cursor-grab touch-none rounded-md p-1 text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVerticalIcon className="size-4" />
-        </button>
-
-        <span
-          className="mt-1.5 size-2.5 shrink-0 rounded-full ring-2 ring-foreground/5"
-          style={{ backgroundColor: card.color }}
-          aria-hidden
-        />
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-medium">{card.name}</div>
-          <CardMeta card={card} />
+      <CardFace
+        color={card.color}
+        name={card.name}
+        issuer={card.issuer}
+        last4={card.last4}
+        className="rounded-none"
+        topRight={
+          // The drag handle owns the gesture; it sits on the face so the whole
+          // card reads as grabbable. Edit/Delete live in the footer and stay
+          // independently clickable.
+          <button
+            type="button"
+            aria-label={`Reorder ${card.name}`}
+            className="-mt-1 -mr-1 cursor-grab touch-none rounded-md bg-white/15 p-1 transition-colors hover:bg-white/25 focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVerticalIcon className="size-4" />
+          </button>
+        }
+      >
+        <div className="flex items-center gap-3 text-[0.7rem] leading-tight opacity-80">
+          <span>
+            stmt <span className="tabular font-medium">{ordinalDay(card.statementDay)}</span>
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            due <span className="tabular font-medium">{ordinalDay(card.paymentDay)}</span>
+          </span>
+          <span aria-hidden>·</span>
+          <span className="font-medium">{card.currency}</span>
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
+      </CardFace>
+
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <span className="text-xs text-muted-foreground">
+          {card.statementCount} statement{card.statementCount === 1 ? "" : "s"}
+        </span>
+        <div className="flex items-center gap-0.5">
           <EditCardDialog
             card={{
               id: card.id,
@@ -133,17 +128,15 @@ function SortableCardRow({ card }: { card: CardRow }) {
             }
           />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 export function CardList({ cards }: { cards: CardRow[] }) {
   // Local order so a drop reflects instantly; the server persists in the
   // background. Re-sync when the server sends a fresh list (add/edit/delete) —
-  // done in render via a prev-prop guard rather than an effect, so there's no
-  // extra commit. `cards` is referentially stable between client re-renders
-  // (parent is a Server Component), so this fires only on real server updates.
+  // done in render via a prev-prop guard rather than an effect.
   const [order, setOrder] = React.useState(cards);
   const [seenCards, setSeenCards] = React.useState(cards);
   if (cards !== seenCards) {
@@ -152,8 +145,6 @@ export function CardList({ cards }: { cards: CardRow[] }) {
   }
 
   const sensors = useSensors(
-    // A small drag threshold keeps a plain click/tap on the handle from being
-    // read as a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
@@ -181,21 +172,15 @@ export function CardList({ cards }: { cards: CardRow[] }) {
 
   return (
     <DndContext
-      // Stable id so dnd-kit's a11y `aria-describedby` matches server↔client.
-      // Without it dnd-kit falls back to an auto-increment counter that drifts
-      // between SSR and hydration, throwing a hydration mismatch.
       id="card-sort"
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext
-        items={order.map((c) => c.id)}
-        strategy={verticalListSortingStrategy}
-      >
-        <div className="flex flex-col gap-2">
+      <SortableContext items={order.map((c) => c.id)} strategy={rectSortingStrategy}>
+        <div className="grid gap-4 sm:grid-cols-2">
           {order.map((card) => (
-            <SortableCardRow key={card.id} card={card} />
+            <SortableCardTile key={card.id} card={card} />
           ))}
         </div>
       </SortableContext>

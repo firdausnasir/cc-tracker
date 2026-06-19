@@ -53,12 +53,32 @@ export async function createStatementAction(
     month,
   );
 
+  const amountDue = parseAmountToMinor(amount);
+
+  // Re-import path: a statement already exists for this card + cycle. Update
+  // the balance instead of duplicating the statement.
+  const existing = await prisma.statement.findFirst({
+    where: { cardId, statementDate, card: { userId } },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await prisma.statement.update({
+      where: { id: existing.id },
+      data: { amountDue },
+    });
+
+    revalidatePath("/dashboard");
+
+    return null;
+  }
+
   await prisma.statement.create({
     data: {
       cardId,
       statementDate,
       dueDate,
-      amountDue: parseAmountToMinor(amount),
+      amountDue,
     },
   });
 
