@@ -11,7 +11,7 @@ host volume.
 ## Stack
 
 - **Next.js 16** (App Router, standalone output) + React 19 + TypeScript
-- **Docker Compose** — single ~415 MB Alpine container
+- **Docker Compose** — single Alpine container with Next standalone output
 - **Auth.js v5** (NextAuth) — email/password (Credentials), JWT sessions
 - **Prisma 6** → **SQLite** (file on a mounted volume)
 - **Tailwind CSS v4** + shadcn (`base-nova`, base-ui primitives)
@@ -45,8 +45,8 @@ Presentation timezone is MYT (`Asia/Kuala_Lumpur`); the server clock is UTC.
 
 ## Deploy (Docker Compose)
 
-The fastest path — one command builds the image, applies migrations, and serves
-on port 3000.
+The fastest path — one command pulls the published image, applies migrations,
+and serves on port 3000.
 
 1. **Configure env**
    ```bash
@@ -58,6 +58,7 @@ on port 3000.
 
 2. **Up**
    ```bash
+   docker compose pull
    docker compose up -d
    ```
    Open <http://localhost:3000> → you'll be sent to `/signup`. Create an account
@@ -68,6 +69,37 @@ across `docker compose down` and image rebuilds — your data lives on this
 machine, not inside the container. Back it up by copying `./data`; reset by
 deleting `./data/cc.db`. Migrations run automatically on every container start
 (`prisma migrate deploy`, a no-op when already current).
+
+### Prebuilt images / Raspberry Pi notes
+
+Use a 64-bit Raspberry Pi OS. Next.js 16's native build tooling supports Linux
+ARM64, but not 32-bit ARM. The GitHub Actions workflow publishes multi-arch
+images for `linux/amd64` and `linux/arm64` to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/firdausnasir/cc-tracker:latest
+```
+
+Compose uses that image by default, so low-spec machines do not need to compile
+Next.js locally:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+If the GHCR package is private, authenticate once on the target machine:
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
+```
+
+For local image development, build directly with Docker and tag the image you
+want Compose to run:
+
+```bash
+DOCKER_BUILDKIT=1 docker build -t ghcr.io/firdausnasir/cc-tracker:latest .
+```
 
 ## Local development
 
@@ -106,7 +138,7 @@ npm run db:migrate            # prisma migrate deploy
 ```bash
 npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
-docker compose build  # prove the production image builds
+DOCKER_BUILDKIT=1 docker build -t cc-tracker:verify .  # prove the production image builds
 ```
 
 ## Roadmap (deferred from v1)

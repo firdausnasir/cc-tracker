@@ -1,5 +1,5 @@
-# cc-tracker — single-service deployment. `docker compose up -d` builds the
-# image, runs Prisma migrations, and serves on :3000.
+# cc-tracker — single-service deployment. `docker compose up -d` pulls the
+# published GHCR image, runs Prisma migrations, and serves on :3000.
 #
 # SQLite persists via a HOST BIND MOUNT: the DB file lives at ./data/cc.db on
 # this machine, not inside the container. `docker compose down` (even with the
@@ -8,8 +8,8 @@
 
 services:
   app:
-    build: .
-    image: cc-tracker:latest
+    image: ghcr.io/firdausnasir/cc-tracker:latest
+    init: true
     restart: unless-stopped
     ports:
       - "3000:3000"

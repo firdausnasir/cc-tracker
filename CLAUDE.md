@@ -4,6 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @AGENTS.md
 
+## Agent docs sync
+
+Keep `AGENTS.md` and `CLAUDE.md` aligned. When changing persistent agent
+instructions, update both files in the same change or explicitly document why
+one file does not need the update.
+
 <!-- IA policy §7.3 — mandatory classification -->
 
 - **Tier:** C
@@ -30,14 +36,14 @@ npm run build            # prisma generate && next build
 npm run start            # next start (production server)
 npm run lint             # eslint
 npm run typecheck        # tsc --noEmit
-docker compose up -d     # build image, run migrations, serve on :3000
-docker compose build     # build the production image
+docker compose up -d     # pull image, run migrations, serve on :3000
+DOCKER_BUILDKIT=1 docker build -t cc-tracker:verify .  # build the production image
 ```
 
 **Verification (no test framework configured):** the proving command is
-`npm run typecheck && npm run lint`. For deployment behavior, `docker compose
-build` proves the production image; `docker compose up -d` then exercises the
-real runtime (boot-time migrations + `next start`).
+`npm run typecheck && npm run lint`. For deployment behavior, `docker build`
+proves the production image; `docker compose up -d` then exercises the real
+runtime (boot-time migrations + `next start`) using the published GHCR image.
 
 ### Database (Prisma + SQLite)
 
@@ -59,8 +65,8 @@ every query. Self-hosted via **Docker Compose** — a single container running t
 Next.js **standalone** server (`output: "standalone"`, served via
 `node server.js`), backed by **SQLite** at `./data/cc.db` (a host bind mount, so
 the DB persists across container removal and rebuilds). Migrations apply on
-startup via `docker-entrypoint.sh`, using an isolated prisma CLI kept out of the
-standalone bundle to keep the image small.
+startup via `docker-entrypoint.sh`, using an isolated Prisma CLI copied from the
+locked build dependency install and kept out of the standalone server bundle.
 
 **Runtime data access — shared Prisma client.** Obtain Prisma via
 `await getPrisma()` (`src/lib/prisma.ts`), which returns a process-wide
