@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Figtree, Bricolage_Grotesque, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -48,10 +47,12 @@ export const viewport: Viewport = {
 };
 
 // Set the theme class before first paint so there's no light-mode flash on a
-// dark-preferring device. Runs synchronously at the top of <body> (avoids
-// manually rendering <head>, which clashes with Next's head management and
-// caused a hydration mismatch). The <html> class it mutates is marked
-// suppressHydrationWarning so React doesn't flag the server/client difference.
+// dark-preferring device. A RAW <script> (not next/script) is required: it must
+// be a render-blocking inline script that runs synchronously during HTML parse,
+// before the browser paints body content. next/script's beforeInteractive routes
+// inline code through Next's loader and does not guarantee pre-paint execution,
+// which is what caused the white flashbang. The <html> class it mutates is
+// marked suppressHydrationWarning so React doesn't flag the server/client diff.
 // "device" (the default) and any absent/unknown value follow the OS preference;
 // only an explicit "light"/"dark" choice overrides it.
 const noFlashTheme = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
@@ -68,11 +69,7 @@ export default function RootLayout({
       className={`${figtree.variable} ${bricolage.variable} ${plexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Script
-          id="no-flash-theme"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: noFlashTheme }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: noFlashTheme }} />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
