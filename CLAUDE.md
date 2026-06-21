@@ -66,7 +66,8 @@ Next.js **standalone** server (`output: "standalone"`, served via
 `node server.js`), backed by **SQLite** at `./data/cc.db` (a host bind mount, so
 the DB persists across container removal and rebuilds). Migrations apply on
 startup via `docker-entrypoint.sh`, using an isolated Prisma CLI copied from the
-locked build dependency install and kept out of the standalone server bundle.
+dedicated `prisma-cli` Docker stage and kept out of the standalone server
+bundle.
 
 **Runtime data access — shared Prisma client.** Obtain Prisma via
 `await getPrisma()` (`src/lib/prisma.ts`), which returns a process-wide

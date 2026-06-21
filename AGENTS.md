@@ -44,4 +44,5 @@ Self-hosted runtime is Docker Compose pulling the published GHCR image
 standalone server (`output: "standalone"`, served via `node server.js`) backed
 by SQLite at `./data/cc.db` through a host bind mount. Migrations apply on
 startup via `docker-entrypoint.sh`, using an isolated Prisma CLI copied from the
-locked build dependency install and kept out of the standalone server bundle.
+dedicated `prisma-cli` Docker stage and kept out of the standalone server
+bundle.

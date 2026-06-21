@@ -25,6 +25,15 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN --mount=type=cache,target=/app/.next/cache npm run build:docker
 
+# --- prisma-cli: isolated prisma CLI + engines for boot-time migrations --------
+# Keep the migration CLI out of the standalone server bundle. This extra install
+# is slower than copying from deps, but it is explicit, maintainable, and avoids
+# a long fragile list of node_modules COPY instructions.
+FROM base AS prisma-cli
+WORKDIR /opt/prisma
+RUN --mount=type=cache,target=/root/.npm npm init -y >/dev/null 2>&1 \
+    && npm install --no-save --omit=dev prisma@6.19.3
+
 # --- runner: minimal runtime image --------------------------------------------
 FROM base AS runner
 WORKDIR /app
@@ -53,41 +62,7 @@ COPY --chown=node:node --from=builder /app/public ./public
 COPY --chown=node:node --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Isolated prisma CLI + the schema/migrations for `migrate deploy` on startup.
-# Reuse the locked dependency install instead of resolving/downloading Prisma a
-# second time. Keep this list aligned with `node_modules/prisma/package.json`.
-COPY --chown=node:node --from=deps /app/node_modules/prisma ./prisma-cli/node_modules/prisma
-COPY --chown=node:node --from=deps /app/node_modules/@prisma/config ./prisma-cli/node_modules/@prisma/config
-COPY --chown=node:node --from=deps /app/node_modules/@prisma/debug ./prisma-cli/node_modules/@prisma/debug
-COPY --chown=node:node --from=deps /app/node_modules/@prisma/engines ./prisma-cli/node_modules/@prisma/engines
-COPY --chown=node:node --from=deps /app/node_modules/@prisma/engines-version ./prisma-cli/node_modules/@prisma/engines-version
-COPY --chown=node:node --from=deps /app/node_modules/@prisma/fetch-engine ./prisma-cli/node_modules/@prisma/fetch-engine
-COPY --chown=node:node --from=deps /app/node_modules/@prisma/get-platform ./prisma-cli/node_modules/@prisma/get-platform
-COPY --chown=node:node --from=deps /app/node_modules/@standard-schema/spec ./prisma-cli/node_modules/@standard-schema/spec
-COPY --chown=node:node --from=deps /app/node_modules/c12 ./prisma-cli/node_modules/c12
-COPY --chown=node:node --from=deps /app/node_modules/chokidar ./prisma-cli/node_modules/chokidar
-COPY --chown=node:node --from=deps /app/node_modules/citty ./prisma-cli/node_modules/citty
-COPY --chown=node:node --from=deps /app/node_modules/consola ./prisma-cli/node_modules/consola
-COPY --chown=node:node --from=deps /app/node_modules/confbox ./prisma-cli/node_modules/confbox
-COPY --chown=node:node --from=deps /app/node_modules/defu ./prisma-cli/node_modules/defu
-COPY --chown=node:node --from=deps /app/node_modules/destr ./prisma-cli/node_modules/destr
-COPY --chown=node:node --from=deps /app/node_modules/deepmerge-ts ./prisma-cli/node_modules/deepmerge-ts
-COPY --chown=node:node --from=deps /app/node_modules/dotenv ./prisma-cli/node_modules/dotenv
-COPY --chown=node:node --from=deps /app/node_modules/effect ./prisma-cli/node_modules/effect
-COPY --chown=node:node --from=deps /app/node_modules/empathic ./prisma-cli/node_modules/empathic
-COPY --chown=node:node --from=deps /app/node_modules/exsolve ./prisma-cli/node_modules/exsolve
-COPY --chown=node:node --from=deps /app/node_modules/fast-check ./prisma-cli/node_modules/fast-check
-COPY --chown=node:node --from=deps /app/node_modules/giget ./prisma-cli/node_modules/giget
-COPY --chown=node:node --from=deps /app/node_modules/jiti ./prisma-cli/node_modules/jiti
-COPY --chown=node:node --from=deps /app/node_modules/node-fetch-native ./prisma-cli/node_modules/node-fetch-native
-COPY --chown=node:node --from=deps /app/node_modules/nypm ./prisma-cli/node_modules/nypm
-COPY --chown=node:node --from=deps /app/node_modules/ohash ./prisma-cli/node_modules/ohash
-COPY --chown=node:node --from=deps /app/node_modules/pathe ./prisma-cli/node_modules/pathe
-COPY --chown=node:node --from=deps /app/node_modules/perfect-debounce ./prisma-cli/node_modules/perfect-debounce
-COPY --chown=node:node --from=deps /app/node_modules/pkg-types ./prisma-cli/node_modules/pkg-types
-COPY --chown=node:node --from=deps /app/node_modules/pure-rand ./prisma-cli/node_modules/pure-rand
-COPY --chown=node:node --from=deps /app/node_modules/rc9 ./prisma-cli/node_modules/rc9
-COPY --chown=node:node --from=deps /app/node_modules/readdirp ./prisma-cli/node_modules/readdirp
-COPY --chown=node:node --from=deps /app/node_modules/tinyexec ./prisma-cli/node_modules/tinyexec
+COPY --chown=node:node --from=prisma-cli /opt/prisma/node_modules ./prisma-cli/node_modules
 COPY --chown=node:node --from=builder /app/prisma ./prisma
 
 COPY --chown=node:node docker-entrypoint.sh ./docker-entrypoint.sh
