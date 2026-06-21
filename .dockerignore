@@ -16,3 +16,7 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 .claude
+coverage
+out
+build
+*.tsbuildinfo
